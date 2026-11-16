@@ -45,7 +45,7 @@ const DEFAULTS = {
     monotonicMinSteps: 40,      // any one-way walk (e.g. a list of known frequencies)
     monotonicMinSpanMHz: 5.0,
     sweepMinSecondsPerTune: 0.4,// faster runs are key scrolling by a person, not a scan
-    maxRhythmVariation: 0.15,    // variation of the time between tunes (0 = a metronome; people are far above)
+    maxRhythmVariation: 0.10,    // variation of the time between tunes (0 = a metronome; people are far above)
     throttledHitsToBan: 60,     // tune attempts ignored within 5 minutes before a ban
     banMinutes: 60,
     whitelist: [],              // addresses never touched
@@ -109,12 +109,17 @@ function cleanIp(ip) {
     return String(ip || '').trim().replace(/^::ffff:/, '');
 }
 
-// The address to judge. Behind our proxy the client can put anything in the FIRST
-// X-Forwarded-For entry, but the LAST one is added by the proxy itself.
+// The address to judge. A client can put anything in the FIRST X-Forwarded-For entry,
+// but each proxy appends the address it saw. Walking from the right, skip the local
+// addresses of our own proxies; the first public address is the real visitor.
+// (Only local addresses are skipped, so a fake header can never hide the visitor.)
 function guardIp(request) {
-    const xff = String(request.headers['x-forwarded-for'] || '').split(',').map(cleanIp).filter(Boolean);
-    if (xff.length) return xff[xff.length - 1];
-    return cleanIp(request.socket && request.socket.remoteAddress);
+    const chain = [...String(request.headers['x-forwarded-for'] || '').split(',').map(cleanIp).filter(Boolean),
+                   cleanIp(request.socket && request.socket.remoteAddress)].filter(Boolean);
+    for (let i = chain.length - 1; i >= 0; i--) {
+        if (!isLocal(chain[i])) return chain[i];
+    }
+    return chain[chain.length - 1] || '';
 }
 
 function allIps(request) {

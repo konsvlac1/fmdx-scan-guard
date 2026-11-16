@@ -262,7 +262,7 @@ Yes, under the MIT licence (see below).
 | `monotonicMinSteps` | 40 | tunes in one direction that count as a walk |
 | `monotonicMinSpanMHz` | 5.0 | minimum width of a walk |
 | `sweepMinSecondsPerTune` | 0.4 | faster runs are key scrolling by a person |
-| `maxRhythmVariation` | 0.15 | how steady the rhythm must be to look automated |
+| `maxRhythmVariation` | 0.10 | how steady the rhythm must be to look automated |
 | `throttledHitsToBan` | 60 | ignored tunes within 5 minutes before a ban |
 | `banMinutes` | 60 | length of a ban |
 | `whitelist` | `[]` | addresses that are never touched |
