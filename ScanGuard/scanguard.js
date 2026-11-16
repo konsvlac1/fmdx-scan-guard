@@ -1,5 +1,7 @@
-// Scan Guard page part: a shield button in the admin quick buttons (settings menu)
-// that opens a small panel with Watch / Enforce, current bans and recent events.
+// Scan Guard page part:
+//   - main page: a shield button in the admin quick buttons (settings menu) that opens
+//     a small window with Watch / Enforce, AI crawlers, current bans and recent events
+//   - Setup page (/setup): the same controls in their own "Scan Guard" tab
 // Only admins get this row, so listeners and tune-password users see nothing and send no requests.
 (function () {
     'use strict';
@@ -13,22 +15,24 @@
   width: min(560px, 94vw); max-height: 86vh; overflow: auto; box-sizing: border-box; padding: 18px 20px;
   background: var(--color-1, #1b1b1b); color: var(--color-text, #fff); border-radius: 14px;
   border: 1px solid var(--color-4, #888); box-shadow: 0 10px 40px rgba(0,0,0,.6); font-size: 14px; text-align: left; }
+.sg-box { text-align: left; font-size: 14px; }
+#sg-setup .sg-box { max-width: 760px; margin: 0 auto; }
 #sg-backdrop { position: fixed; inset: 0; z-index: 99999; background: rgba(0,0,0,.45); }
-#sg-panel h2 { margin: 0 0 4px; font-size: 18px; display: flex; align-items: center; gap: 8px; }
-#sg-panel .sg-sub { margin: 0 0 14px; opacity: .75; font-size: 13px; }
-#sg-panel button { width: auto !important; height: auto !important; min-width: 0 !important; margin: 0 !important;
+.sg-box h2 { margin: 0 0 4px; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+.sg-box .sg-sub { margin: 0 0 14px; opacity: .75; font-size: 13px; }
+.sg-box button { width: auto !important; height: auto !important; min-width: 0 !important; margin: 0 !important;
   padding: 8px 16px !important; border-radius: 10px !important; cursor: pointer; font-size: 14px !important;
   background: var(--color-2, #333) !important; color: var(--color-text, #fff) !important; border: 1px solid transparent !important; }
-#sg-panel button.sg-on { background: var(--color-4, #5a5) !important; color: var(--color-main, #000) !important; font-weight: 700; }
-#sg-panel .sg-modes { display: flex; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
-#sg-panel .sg-help { font-size: 13px; opacity: .85; margin: 6px 0 16px; line-height: 1.4; }
-#sg-panel h3 { margin: 16px 0 6px; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; opacity: .8; }
-#sg-panel table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-#sg-panel td { padding: 5px 6px; border-top: 1px solid rgba(255,255,255,.1); vertical-align: top; }
-#sg-panel .sg-empty { opacity: .6; font-size: 13px; }
-#sg-panel .sg-close { position: absolute; top: 10px; right: 12px; padding: 2px 10px !important; font-size: 18px !important; }
-#sg-panel .sg-small { padding: 3px 10px !important; font-size: 12px !important; }
-#sg-panel .sg-ban { color: #ff8a80; font-weight: 700; }
+.sg-box button.sg-on { background: var(--color-4, #5a5) !important; color: var(--color-main, #000) !important; font-weight: 700; }
+.sg-box .sg-modes { display: flex; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+.sg-box .sg-help { font-size: 13px; opacity: .85; margin: 6px 0 16px; line-height: 1.4; }
+.sg-box h3 { margin: 16px 0 6px; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; opacity: .8; }
+.sg-box table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.sg-box td { padding: 5px 6px; border-top: 1px solid rgba(255,255,255,.1); vertical-align: top; }
+.sg-box .sg-empty { opacity: .6; font-size: 13px; }
+.sg-box .sg-close { position: absolute; top: 10px; right: 12px; padding: 2px 10px !important; font-size: 18px !important; }
+.sg-box .sg-small { padding: 3px 10px !important; font-size: 12px !important; }
+.sg-box .sg-ban { color: #ff8a80; font-weight: 700; }
 `;
 
     function addStyle() {
@@ -59,7 +63,7 @@
         AI_BLOCK: 'AI crawler refused'
     };
 
-    function render(st) {
+    function render(st, box) {
         const enforce = st.mode === 'enforce';
         const aiOn = !st.ai || st.ai.mode === 'block';
         if (button) button.classList.toggle('active', enforce);
@@ -70,7 +74,7 @@
             return `<tr><td>${esc(when(e.time))}</td><td>${esc(e.ip === '-' ? '' : e.ip)}</td>
                 <td><span class="${e.event === 'BAN' ? 'sg-ban' : ''}">${esc(what)}</span>${e.note ? '<br><span style="opacity:.7">' + esc(e.note) + '</span>' : ''}</td></tr>`;
         }).join('');
-        panel.querySelector('.sg-body').innerHTML = `
+        box.querySelector('.sg-body').innerHTML = `
             <h3>Band-scanning robots</h3>
             <div class="sg-modes">
               <button data-mode="watch" class="${enforce ? '' : 'sg-on'}">👁 Watch</button>
@@ -95,9 +99,26 @@
             ${events ? `<table>${events}</table>` : '<div class="sg-empty">Nothing suspicious so far.</div>'}`;
     }
 
-    async function refresh() {
-        try { render(await api('GET', '/scanguard/status')); }
-        catch (e) { panel.querySelector('.sg-body').innerHTML = `<div class="sg-empty">Could not load Scan Guard (${esc(e.message)}). Are you logged in as admin?</div>`; }
+    async function refresh(box) {
+        try { render(await api('GET', '/scanguard/status'), box); }
+        catch (e) { box.querySelector('.sg-body').innerHTML = `<div class="sg-empty">Could not load Scan Guard (${esc(e.message)}). Are you logged in as admin?</div>`; }
+    }
+
+    // Buttons inside a Scan Guard box (window or Setup tab)
+    function wire(box) {
+        box.addEventListener('click', async ev => {
+            const t = ev.target.closest('button');
+            if (!t) return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            if (t.classList.contains('sg-close')) return close();
+            try {
+                if (t.dataset.mode) await api('POST', '/scanguard/mode?mode=' + t.dataset.mode);
+                if (t.dataset.ai) await api('POST', '/scanguard/ai?mode=' + t.dataset.ai);
+                if (t.dataset.unban) await api('POST', '/scanguard/unban?ip=' + encodeURIComponent(t.dataset.unban));
+                if (t.dataset.refresh === undefined || t.dataset.mode || t.dataset.ai || t.dataset.unban) await refresh(box);
+            } catch (e) { alert('Scan Guard: ' + e.message); }
+        });
     }
 
     // FM-DX tunes on arrow keys, B and R: keep keys inside the panel while it is open
@@ -123,26 +144,16 @@
         bd.addEventListener('click', close);
         panel = document.createElement('div');
         panel.id = 'sg-panel';
+        panel.className = 'sg-box';
         panel.setAttribute('role', 'dialog');
         panel.innerHTML = `<button class="sg-close" aria-label="Close">×</button>
             <h2>🛡 Scan Guard <span style="font-size:12px;font-weight:400;opacity:.7">by konvlachos</span></h2><p class="sg-sub">Protects this tuner from band-scanning robots and this site from AI crawlers.</p>
             <div class="sg-body"><div class="sg-empty">Loading…</div></div>`;
-        panel.addEventListener('click', async ev => {
-            const t = ev.target.closest('button');
-            if (!t) return;
-            ev.preventDefault();
-            ev.stopPropagation();
-            if (t.classList.contains('sg-close')) return close();
-            try {
-                if (t.dataset.mode) render({ ...(await api('POST', '/scanguard/mode?mode=' + t.dataset.mode)), ...(await api('GET', '/scanguard/status')) });
-                if (t.dataset.ai) { await api('POST', '/scanguard/ai?mode=' + t.dataset.ai); await refresh(); }
-                if (t.dataset.unban) { await api('POST', '/scanguard/unban?ip=' + encodeURIComponent(t.dataset.unban)); await refresh(); }
-            } catch (e) { alert('Scan Guard: ' + e.message); }
-        });
+        wire(panel);
         document.body.appendChild(bd);
         document.body.appendChild(panel);
         window.addEventListener('keydown', keyGuard, true);
-        refresh();
+        refresh(panel);
     }
 
     function addButton() {
@@ -169,7 +180,62 @@
         return true;
     }
 
+    // Setup page: a "Scan Guard" tab right after "Plugins"
+    function addSetupTab() {
+        const pluginsLi = document.querySelector('ul.nav li[data-panel="plugins-tab"]');
+        const pluginsPanel = document.getElementById('plugins-tab');
+        if (!pluginsLi || !pluginsPanel || document.getElementById('sg-setup')) return !!pluginsLi;
+        addStyle();
+        const li = document.createElement('li');
+        li.setAttribute('role', 'tab');
+        li.setAttribute('data-panel', 'sg-setup');
+        li.setAttribute('tabindex', '0');
+        li.innerHTML = '<a href="#" role="tab" tabindex="-1" aria-controls="sg-setup"><i class="fa-solid fa-fw fa-shield-halved"></i> Scan Guard</a>';
+        pluginsLi.after(li);
+
+        const tab = document.createElement('div');
+        tab.className = 'panel-full m-0 tab-content no-bg';
+        tab.id = 'sg-setup';
+        tab.setAttribute('role', 'tabpanel');
+        tab.style.display = 'none';
+        tab.innerHTML = `<h2>Scan Guard</h2>
+            <div class="panel-100 p-bottom-20"><div class="sg-box">
+              <p class="sg-sub">Protects this tuner from band-scanning robots and this site from AI crawlers.
+                <span style="opacity:.7">by konvlachos</span></p>
+              <div class="sg-body"><div class="sg-empty">Loading…</div></div>
+            </div></div>`;
+        pluginsPanel.after(tab);
+        wire(tab.querySelector('.sg-box'));
+
+        // Same behaviour as the Setup page's own tabs (they may already be wired up)
+        li.addEventListener('click', e => {
+            e.preventDefault();
+            document.querySelectorAll('ul.nav li').forEach(x => { x.classList.remove('active'); x.setAttribute('aria-selected', 'false'); });
+            li.classList.add('active');
+            li.setAttribute('aria-selected', 'true');
+            if (document.activeElement && document.activeElement.closest && document.activeElement.closest('ul.nav')) li.focus({ preventScroll: true });
+            history.replaceState(null, '', '#sg-setup');
+            document.querySelectorAll('.tab-content').forEach(x => { x.style.display = 'none'; });
+            tab.style.display = '';
+            refresh(tab.querySelector('.sg-box'));
+        });
+        li.addEventListener('keydown', e => { if (e.key === 'Enter') li.click(); });
+        window.addEventListener('hashchange', () => { if (location.hash === '#sg-setup') li.click(); });
+        // Direct link /setup#sg-setup: the Setup page shows its first tab while starting,
+        // so keep selecting ours until it stays visible (up to 5 s)
+        if (location.hash === '#sg-setup') {
+            let n = 0;
+            const t = setInterval(() => {
+                if (tab.style.display === 'none' || !tab.offsetParent) li.click();
+                else if (++n > 3) clearInterval(t);
+            }, 300);
+            setTimeout(() => clearInterval(t), 5000);
+        }
+        return true;
+    }
+
     function start() {
+        if (addSetupTab()) return;
         if (addButton()) return;
         let tries = 0;
         const t = setInterval(() => { if (addButton() || ++tries > 20) clearInterval(t); }, 500);

@@ -39,7 +39,7 @@ This part starts in **watch mode**: for the first days it only writes down what 
 2. **Switch it on** in your FM-DX page: Setup → Plugins → tick *Scan Guard* → Save.
 3. **Restart** FM-DX Webserver.
 4. AI crawlers are blocked straight away. For band-scanning robots, **wait a few days**
-   and look at what it noticed: click the **shield 🛡** button.
+   and look at what it noticed: click the **shield 🛡** button, or open **Setup → Scan Guard**.
 5. When you are happy, click **Enforce** in the same window. Done.
 
 Each step is explained below. You do not need to know programming.
@@ -132,6 +132,9 @@ In watch mode Scan Guard blocks nobody. It only writes down what it would have b
 
    Click the **shield**. It is the 4th button, just before **Sign out**.
    Only you (the admin) see this button; listeners never see it.
+
+   **Or** open the admin panel (Setup) and click the tab **🛡 Scan Guard**,
+   right below **Plugins**. It has exactly the same buttons.
 3. A window opens with **Recent events**, for example
    *"would have been blocked (watch mode): band sweep, 87.50→92.50 MHz"*.
    If it says "Nothing suspicious so far", no robot has come yet.
@@ -142,7 +145,7 @@ In watch mode Scan Guard blocks nobody. It only writes down what it would have b
 
 When you are happy with what you saw:
 
-1. Click the **shield 🛡** button as above.
+1. Click the **shield 🛡** button, or open **Setup → Scan Guard**.
 2. Click **🛡 Enforce**. That's all, no restart needed.
 
 From then on robots are disconnected and blocked for one hour.
@@ -286,7 +289,7 @@ TELEGRAM_CHAT_ID=123456789
 - `POST /scanguard/unban?ip=1.2.3.4`: lift a ban
 - `POST /scanguard/ai?mode=block|off`: AI crawler blocking on or off
 
-The shield button in the admin quick buttons uses these. POST requests are only
+The shield button in the admin quick buttons and the Setup tab use these. POST requests are only
 accepted from the server's own page (Origin check).
 
 ### Files
