@@ -1,6 +1,6 @@
 // Scan Guard page part: a shield button in the admin quick buttons (settings menu)
 // that opens a small panel with Watch / Enforce, current bans and recent events.
-// Only admins get the quick buttons, so listeners see nothing and send no requests.
+// Only admins get this row, so listeners and tune-password users see nothing and send no requests.
 (function () {
     'use strict';
 
@@ -133,7 +133,9 @@
     }
 
     function addButton() {
-        const bar = document.querySelector('.admin-quick-dashboard');
+        // The admin row is the one with the admin lock (tune-password users get a row without it)
+        const lock = document.getElementById('dashboard-lock-admin');
+        const bar = lock && lock.closest('.admin-quick-dashboard');
         if (!bar || document.getElementById('dashboard-scanguard')) return !!bar;
         button = document.createElement('div');
         button.className = 'icon tooltip';
@@ -146,7 +148,9 @@
         button.innerHTML = '<i class="fa-solid fa-shield-halved"></i>';
         button.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); open(); });
         button.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
-        bar.appendChild(button);
+        // Just before "Sign out"
+        const signOut = bar.querySelector('.logout-link');
+        if (signOut) bar.insertBefore(button, signOut); else bar.appendChild(button);
         // Show the current mode on the button (lit = enforce)
         api('GET', '/scanguard/status').then(st => button.classList.toggle('active', st.mode === 'enforce')).catch(() => {});
         return true;

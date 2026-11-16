@@ -23,6 +23,18 @@ Scan Guard starts in **watch mode**: for the first days it only writes down what
 
 ---
 
+## In short: 5 steps
+
+1. **Download and install** Scan Guard with one command ([Raspberry Pi / Linux](#install-on-a-raspberry-pi-or-linux) or [Windows](#install-on-windows)).
+2. **Switch it on** in your FM-DX page: Setup → Plugins → tick *Scan Guard* → Save.
+3. **Restart** FM-DX Webserver.
+4. **Wait a few days** and look at what it noticed: click the **shield 🛡** button.
+5. When you are happy, click **Enforce** in the same window. Done.
+
+Each step is explained below. You do not need to know programming.
+
+---
+
 ## What you need
 
 - **FM-DX Webserver version 1.4** (on a Raspberry Pi, a Linux PC or Windows).
@@ -38,7 +50,9 @@ the folders `server`, `plugins` and `web`. For example:
 
 ## Install on a Raspberry Pi or Linux
 
-**Step 1.** Open a terminal on the Pi (or connect with SSH).
+**Step 1.** Open a **terminal**. That is the window where you type commands.
+- If the Pi has a screen: click the **Raspberry menu → Accessories → Terminal**.
+- If you work from another computer: connect to the Pi with SSH (for example with the program PuTTY on Windows).
 
 **Step 2.** Copy these three lines, paste them into the terminal and press Enter.
 Change `/home/pi/fm-dx-webserver` in the last line to your FM-DX folder:
@@ -83,11 +97,13 @@ You should see lines with ✓ and "Scan Guard is installed".
 ## Turn it on (Windows and Linux)
 
 1. Open your FM-DX page in the browser and **log in as admin**.
-2. Go to **Setup → Plugins**, put a tick at **Scan Guard**, and press **Save**.
-3. **Restart FM-DX Webserver**:
+2. Open the **admin panel** (Setup). You can type your page address with `/setup` at the end,
+   for example `https://your-fmdx-page.example/setup`.
+3. Go to **Plugins**, put a tick at **Scan Guard**, and press **Save**.
+4. **Restart FM-DX Webserver**:
    - Windows: close the FM-DX window and start FM-DX again.
    - Raspberry Pi / Linux, if FM-DX runs as a service: `sudo systemctl restart fm-dx-webserver`
-4. Done. In the FM-DX messages you will see: **`[Scan Guard] active, mode: watch`**
+5. Done. In the FM-DX messages you will see: **`[Scan Guard] active, mode: watch`**
 
 ---
 
@@ -97,8 +113,13 @@ In watch mode Scan Guard blocks nobody. It only writes down what it would have b
 
 **To see what it noticed:**
 1. Open your FM-DX page and log in as **admin**.
-2. Open the **settings menu** (the gear). Under "You are logged in as an administrator"
-   you see a row of small buttons. Click the **shield 🛡** button.
+2. Open the **settings menu** (the gear ⚙ button). Under "You are logged in as an administrator"
+   there is a row of small square buttons:
+
+   ![The admin buttons: lock, key, person, shield, sign out](docs/admin-buttons.png)
+
+   Click the **shield**. It is the 4th button, just before **Sign out**.
+   Only you (the admin) see this button; listeners never see it.
 3. A window opens with **Recent events**, for example
    *"would have been blocked (watch mode): band sweep, 87.50→92.50 MHz"*.
    If it says "Nothing suspicious so far", no robot has come yet.
@@ -116,7 +137,7 @@ From then on robots are disconnected and blocked for one hour.
 The shield button is **lit** while Scan Guard is in enforce mode.
 To go back, click **👁 Watch**.
 
-## Test it yourself
+## Test it yourself (optional, a little technical)
 
 You can play the robot yourself to see Scan Guard react. The test robot tunes your
 tuner from 87.5 MHz upward in steps of 0.1 MHz, one step every 0.6 seconds,
