@@ -200,8 +200,7 @@
         tab.style.display = 'none';
         tab.innerHTML = `<h2>Scan Guard</h2>
             <div class="panel-100 p-bottom-20"><div class="sg-box">
-              <p class="sg-sub">Protects this tuner from band-scanning robots and this site from AI crawlers.
-                <span style="opacity:.7">by konvlachos</span></p>
+              <p class="sg-sub">Protects this tuner from band-scanning robots and this site from AI crawlers.</p>
               <div class="sg-body"><div class="sg-empty">Loading…</div></div>
             </div></div>`;
         pluginsPanel.after(tab);
