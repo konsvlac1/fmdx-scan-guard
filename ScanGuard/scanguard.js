@@ -207,15 +207,17 @@
         wire(tab.querySelector('.sg-box'));
 
         // Same behaviour as the Setup page's own tabs (they may already be wired up)
+        let filled = false;
         li.addEventListener('click', e => {
             e.preventDefault();
+            filled = true;
             document.querySelectorAll('ul.nav li').forEach(x => { x.classList.remove('active'); x.setAttribute('aria-selected', 'false'); });
             li.classList.add('active');
             li.setAttribute('aria-selected', 'true');
             if (document.activeElement && document.activeElement.closest && document.activeElement.closest('ul.nav')) li.focus({ preventScroll: true });
             history.replaceState(null, '', '#sg-setup');
             document.querySelectorAll('.tab-content').forEach(x => { x.style.display = 'none'; });
-            tab.style.display = '';
+            tab.style.display = 'block';           // the Setup stylesheet hides tabs by default
             refresh(tab.querySelector('.sg-box'));
         });
         li.addEventListener('keydown', e => { if (e.key === 'Enter') li.click(); });
@@ -225,7 +227,7 @@
         if (location.hash === '#sg-setup') {
             let n = 0;
             const t = setInterval(() => {
-                if (tab.style.display === 'none' || !tab.offsetParent) li.click();
+                if (tab.style.display === 'none' || !tab.offsetParent || !filled) li.click();
                 else if (++n > 3) clearInterval(t);
             }, 300);
             setTimeout(() => clearInterval(t), 5000);
