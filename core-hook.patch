@@ -1,6 +1,15 @@
---- a/server/index.js
-+++ b/server/index.js
-@@ -367,10 +367,17 @@
+--- a/server/index.js	2026-11-16 23:33:25.971194178 +0200
++++ b/server/index.js	2026-11-16 23:33:26.141200117 +0200
+@@ -100,6 +100,8 @@
+ let serialport;
+ let timeoutAntenna;
+ 
++// Scan Guard (plugins/ScanGuard): keep AI crawlers off the site
++app.use((req, res, next) => (scanGuard ? scanGuard.httpGuard(req, res, next) : next()));
+ app.use(express.urlencoded({ extended: true }));
+ const sessionMiddleware = session({
+   secret: 'GTce3tN6U8odMwoI',
+@@ -367,10 +369,17 @@
    }
  }, 60 * 60 * 1000); // Run every hour
  
@@ -18,7 +27,7 @@
      // Per-IP limit connection open
      if (!isLocal) {
          const currentCount = ipConnectionCounts.get(clientIp) || 0;
-@@ -455,6 +462,9 @@
+@@ -455,6 +464,9 @@
              }
          }
  

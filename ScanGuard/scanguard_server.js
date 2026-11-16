@@ -2,6 +2,7 @@
 //   GET  /scanguard/status        mode, current bans, watched addresses, recent events
 //   POST /scanguard/mode?mode=watch|enforce
 //   POST /scanguard/unban?ip=...  lift a ban
+//   POST /scanguard/ai?mode=block|off  AI crawler blocking
 const router = require('../../server/endpoints');
 const guard = require('./guard-core');
 const { logInfo } = require('../../server/console');
@@ -25,6 +26,10 @@ router.post('/scanguard/mode', adminOnly, (req, res) => {
     const ok = guard.setMode(String(req.query.mode || ''));
     res.status(ok ? 200 : 400).json({ ok, mode: guard.status().mode });
 });
+router.post('/scanguard/ai', adminOnly, (req, res) => {
+    const ok = guard.setAiMode(String(req.query.mode || ''));
+    res.status(ok ? 200 : 400).json({ ok, ai: guard.status().ai });
+});
 router.post('/scanguard/unban', adminOnly, (req, res) => res.json({ unbanned: guard.unban(String(req.query.ip || '')) }));
 
-logInfo(`[Scan Guard] active, mode: ${guard.status().mode}`);
+logInfo(`[Scan Guard] active, band scanners: ${guard.status().mode}, AI crawlers: ${guard.status().ai.mode}`);

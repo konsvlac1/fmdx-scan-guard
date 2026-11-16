@@ -4,7 +4,7 @@
 //   Install:    node install.js <FM-DX folder>
 //   Uninstall:  node install.js <FM-DX folder> --uninstall
 //
-// It copies the plugin into <FM-DX folder>/plugins and adds three small lines
+// It copies the plugin into <FM-DX folder>/plugins and adds four small line groups
 // to <FM-DX folder>/server/index.js (a backup is made first). Running it twice is safe.
 
 const fs = require('fs');
@@ -28,10 +28,12 @@ if (!fs.existsSync(indexJs)) fail(`"${app}" is not an FM-DX Webserver folder (se
 const MARK = 'Scan Guard';
 const HOOK_REQUIRE = "// Scan Guard (plugins/ScanGuard): optional, the server runs normally without it\nlet scanGuard = null;\ntry { scanGuard = require('../plugins/ScanGuard/guard-core'); } catch (e) { scanGuard = null; }\n\n";
 const HOOK_CONNECT = "\n    // Scan Guard (plugins/ScanGuard): refuse addresses banned for automated band scanning\n    if (scanGuard && scanGuard.onConnect(ws, request)) return;\n";
+const HOOK_HTTP = "// Scan Guard (plugins/ScanGuard): keep AI crawlers off the site\napp.use((req, res, next) => (scanGuard ? scanGuard.httpGuard(req, res, next) : next()));\n";
 const HOOK_TUNE = "        // Scan Guard: drop tune commands from automated band scanners\n        if (scanGuard && command.startsWith(\"T\") && !scanGuard.allowTune(ws, request, command)) return;\n\n";
 
 const ANCHOR_CONNECTION = "wss.on('connection'";
 const ANCHOR_CLIENT = /const \{ ip: clientIp[^\n]*helpers\.getClient\(request\);\n/;
+const ANCHOR_HTTP = 'app.use(express.urlencoded({ extended: true }));';
 const ANCHOR_WRITE = /( *)if \(\(serverConfig\.publicTuner && !serverConfig\.lockToAdmin\)[^\n]*\n\s*output\.write\(`\$\{command\}\\n`\);/;
 
 const pluginsDir = path.join(app, 'plugins');
@@ -45,7 +47,7 @@ function save(text) {
 
 if (uninstall) {
     const before = src;
-    src = src.split(HOOK_REQUIRE).join('').split(HOOK_CONNECT).join('').split(HOOK_TUNE).join('');
+    src = src.split(HOOK_REQUIRE).join('').split(HOOK_CONNECT).join('').split(HOOK_TUNE).join('').split(HOOK_HTTP).join('');
     if (src !== before) { save(src); console.log('  - removed the Scan Guard lines from server/index.js'); }
     for (const p of [path.join(pluginsDir, 'ScanGuard.js'), path.join(pluginsDir, 'ScanGuard')]) {
         if (fs.existsSync(p)) { fs.rmSync(p, { recursive: true, force: true }); console.log('  - removed ' + path.relative(app, p)); }
@@ -62,20 +64,26 @@ for (const f of ['guard-core.js', 'scanguard.js', 'scanguard_server.js']) {
 }
 console.log('  ✓ plugin copied to plugins/ScanGuard');
 
-// 2. Add the hooks to server/index.js
-if (src.includes(MARK)) {
-    console.log('  ✓ server/index.js already has the Scan Guard lines');
+// 2. Add the hooks to server/index.js (each one only if it is not there yet,
+//    so an older Scan Guard install is upgraded too)
+const hooks = [
+    { has: HOOK_REQUIRE, ok: () => src.includes(ANCHOR_CONNECTION), add: () => { src = src.replace(ANCHOR_CONNECTION, HOOK_REQUIRE + ANCHOR_CONNECTION); } },
+    { has: HOOK_CONNECT, ok: () => ANCHOR_CLIENT.test(src), add: () => { src = src.replace(ANCHOR_CLIENT, m => m + HOOK_CONNECT); } },
+    { has: HOOK_TUNE, ok: () => ANCHOR_WRITE.test(src), add: () => { src = src.replace(ANCHOR_WRITE, m => HOOK_TUNE + m); } },
+    { has: HOOK_HTTP, ok: () => src.includes(ANCHOR_HTTP), add: () => { src = src.replace(ANCHOR_HTTP, HOOK_HTTP + ANCHOR_HTTP); } }
+];
+const missing = hooks.filter(h => !src.includes(h.has));
+if (!missing.length) {
+    console.log('  ✓ server/index.js already has all Scan Guard lines');
 } else {
-    if (!src.includes(ANCHOR_CONNECTION) || !ANCHOR_CLIENT.test(src) || !ANCHOR_WRITE.test(src)) {
+    if (missing.some(h => !h.ok())) {
         fail('this FM-DX version looks different from what Scan Guard expects (made for FM-DX 1.4.x).\n  Nothing in server/index.js was changed. The plugin files were copied but will do nothing.');
     }
     const backup = indexJs + '.before-scanguard';
-    if (!fs.existsSync(backup)) fs.copyFileSync(indexJs, backup);
-    src = src.replace(ANCHOR_CONNECTION, HOOK_REQUIRE + ANCHOR_CONNECTION);
-    src = src.replace(ANCHOR_CLIENT, m => m + HOOK_CONNECT);
-    src = src.replace(ANCHOR_WRITE, m => HOOK_TUNE + m);
+    if (!fs.existsSync(backup) && !src.includes(MARK)) fs.copyFileSync(indexJs, backup);
+    missing.forEach(h => h.add());
     save(src);
-    console.log('  ✓ server/index.js updated (backup: server/index.js.before-scanguard)');
+    console.log(`  ✓ server/index.js updated (${missing.length} line group${missing.length > 1 ? 's' : ''} added; backup: server/index.js.before-scanguard)`);
 }
 
 // 3. Same owner as the FM-DX folder (Linux, when run with sudo)

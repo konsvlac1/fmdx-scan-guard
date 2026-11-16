@@ -2,15 +2,25 @@
 
 *by konvlachos*
 
-**Scan Guard keeps automatic "band-scanning" robots away from your public FM-DX tuner,
-so real listeners can always use it.**
+**Scan Guard protects your public FM-DX Webserver in two ways:**
 
-Some people run computer programs that connect to public FM-DX tuners and tune them
-through the whole FM band (87.5, 87.6, 87.7 … 108.0 MHz) to make station lists.
-While such a robot is running, nobody else can use your tuner.
+### 1. It keeps AI crawlers off your website 🚫
+Companies like OpenAI (ChatGPT), Anthropic (Claude), Perplexity, Google (for AI training),
+Common Crawl, ByteDance (TikTok) and Meta send robots ("crawlers") that read websites to
+train their AI. Scan Guard does the same as sites like Piratenscan.fm:
+- it tells these AI crawlers to stay away (with a file called `robots.txt`), and
+- if they come anyway, they are **refused** (error 403), for the page, the files
+  and the tuner.
+
+Normal visitors, phone apps and normal search engines (Google search, Bing) are **not** affected.
+This is **on from the start**; you can switch it off in the shield window.
+
+### 2. It keeps band-scanning robots off your tuner 📻
+Some people run programs that connect to public FM-DX tuners and tune them through the
+whole FM band (87.5, 87.6, 87.7 … 108.0 MHz) to make station lists. While such a robot
+is running, nobody else can use your tuner.
 
 Scan Guard watches **how** each visitor changes the frequency:
-
 - A **robot** changes frequency in perfectly even steps, at a perfectly steady speed,
   through a large part of the band. Scan Guard recognises this and blocks it for one hour.
 - A **person** tunes in an irregular way: jumps to presets, types a frequency,
@@ -18,7 +28,7 @@ Scan Guard watches **how** each visitor changes the frequency:
 - **You (the admin)**, and programs running on your own server or your own home
   network, are **never** blocked.
 
-Scan Guard starts in **watch mode**: for the first days it only writes down what it
+This part starts in **watch mode**: for the first days it only writes down what it
 *would* block, so you can see it working before it blocks anyone.
 
 ---
@@ -28,7 +38,8 @@ Scan Guard starts in **watch mode**: for the first days it only writes down what
 1. **Download and install** Scan Guard with one command ([Raspberry Pi / Linux](#install-on-a-raspberry-pi-or-linux) or [Windows](#install-on-windows)).
 2. **Switch it on** in your FM-DX page: Setup → Plugins → tick *Scan Guard* → Save.
 3. **Restart** FM-DX Webserver.
-4. **Wait a few days** and look at what it noticed: click the **shield 🛡** button.
+4. AI crawlers are blocked straight away. For band-scanning robots, **wait a few days**
+   and look at what it noticed: click the **shield 🛡** button.
 5. When you are happy, click **Enforce** in the same window. Done.
 
 Each step is explained below. You do not need to know programming.
@@ -103,7 +114,8 @@ You should see lines with ✓ and "Scan Guard is installed".
 4. **Restart FM-DX Webserver**:
    - Windows: close the FM-DX window and start FM-DX again.
    - Raspberry Pi / Linux, if FM-DX runs as a service: `sudo systemctl restart fm-dx-webserver`
-5. Done. In the FM-DX messages you will see: **`[Scan Guard] active, mode: watch`**
+5. Done. In the FM-DX messages you will see:
+   **`[Scan Guard] active, band scanners: watch, AI crawlers: block`**
 
 ---
 
@@ -180,7 +192,7 @@ Everything goes back exactly as it was.
 
 ## After you update FM-DX Webserver
 
-An FM-DX update can undo Scan Guard's three lines in `server/index.js`.
+An FM-DX update can undo Scan Guard's lines in `server/index.js`.
 Just run the install step again (the same line as before). It is safe to run it more than once.
 
 ---
@@ -196,7 +208,13 @@ No. When you are logged in as admin you are never blocked. Your own home network
 programs on the server itself (like the Scanner plugin) are never blocked either.
 
 **Does it stop AI robots that read my web page?**
-No, that is a different problem. Scan Guard only protects the **tuner**.
+Yes, the ones that say who they are (ChatGPT, Claude, Perplexity, Common Crawl, ByteDance,
+Meta, Amazon and others). A robot that pretends to be a normal browser cannot be recognised
+by its name; if it scans your tuner, the band-scan protection still catches it.
+
+**Can I see that AI crawlers are blocked?**
+Yes. Open `https://your-fmdx-page.example/robots.txt` in your browser: you see the list of
+AI crawlers that are asked to stay away. The shield window shows how many were refused.
 
 **Is it free?**
 Yes, under the MIT licence (see below).
@@ -219,6 +237,19 @@ Yes, under the MIT licence (see below).
 - **Address used:** the **last** `X-Forwarded-For` entry, the one your reverse proxy adds, so a fake header cannot dodge a ban.
 - **How bans are kept:** in memory. A restart clears them.
 
+### AI crawlers
+
+- `/robots.txt` is served by Scan Guard: `Disallow: /` for GPTBot, OAI-SearchBot, ChatGPT-User,
+  ClaudeBot, Claude-SearchBot, Claude-User, Claude-Web, anthropic-ai, PerplexityBot, Perplexity-User,
+  CCBot, Bytespider, Amazonbot, Meta-ExternalAgent, Meta-ExternalFetcher, FacebookBot, cohere-ai,
+  cohere-training-data-crawler, MistralAI-User, DuckAssistBot, YouBot, Diffbot, ImagesiftBot, Timpibot,
+  omgili, AI2Bot, Ai2Bot-Dolma, PanguBot, Kangaroo Bot, Webzio-Extended, Applebot-Extended,
+  Google-Extended; `Allow: /` for everyone else.
+- Requests whose User-Agent contains one of these names get **403**, including the tuner
+  WebSocket (Google-Extended and Applebot-Extended are robots.txt tokens only).
+- Other responses get `X-Robots-Tag: noai, noimageai`.
+- Refusals are logged as `AI_BLOCK`, at most once per crawler and address per hour.
+
 ### Settings (`plugins_configs/scanguard.json`, read again automatically when changed)
 
 | Setting | Default | Meaning |
@@ -236,6 +267,8 @@ Yes, under the MIT licence (see below).
 | `banMinutes` | 60 | length of a ban |
 | `whitelist` | `[]` | addresses that are never touched |
 | `telegramLabel` | `TEF FM-DX` | name used in Telegram messages |
+| `aiCrawlers` | `block` | `block` = robots.txt + 403 for AI crawlers, `off` = do nothing |
+| `blockSearchEngines` | `false` | `true` = robots.txt also asks Google, Bing etc. to stay away |
 
 ### Telegram messages (optional)
 
@@ -251,13 +284,14 @@ TELEGRAM_CHAT_ID=123456789
 - `GET /scanguard/status`: mode, current bans, watched addresses, recent events
 - `POST /scanguard/mode?mode=watch|enforce`: switch mode
 - `POST /scanguard/unban?ip=1.2.3.4`: lift a ban
+- `POST /scanguard/ai?mode=block|off`: AI crawler blocking on or off
 
 The shield button in the admin quick buttons uses these. POST requests are only
 accepted from the server's own page (Origin check).
 
 ### Files
 
-- `install.js`: the installer. It copies `ScanGuard.js` + `ScanGuard/` into `plugins/` and adds three lines to `server/index.js` (the same change as `core-hook.patch`, made against FM-DX 1.4.2).
+- `install.js`: the installer. It copies `ScanGuard.js` + `ScanGuard/` into `plugins/` and adds four small line groups to `server/index.js` (the same change as `core-hook.patch`, made against FM-DX 1.4.2).
 - `test/run.sh`: simulated robots and people, no tuner needed: `bash test/run.sh enforce`.
 - `test/bot.js`: a test robot for a real server (see "Test it yourself").
 

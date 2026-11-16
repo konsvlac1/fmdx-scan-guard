@@ -55,11 +55,13 @@
         REFUSED: 'tried again while blocked',
         THROTTLE: 'slowed down: too many changes',
         UNBAN: 'unblocked by admin',
-        MODE: 'mode changed'
+        MODE: 'setting changed',
+        AI_BLOCK: 'AI crawler refused'
     };
 
     function render(st) {
         const enforce = st.mode === 'enforce';
+        const aiOn = !st.ai || st.ai.mode === 'block';
         if (button) button.classList.toggle('active', enforce);
         const bans = (st.bans || []).map(b => `<tr><td>${esc(b.ip)}</td><td>${esc(b.reason)}</td><td>until ${esc(when(b.until))}</td>
             <td><button class="sg-small" data-unban="${esc(b.ip)}">Unblock</button></td></tr>`).join('');
@@ -69,6 +71,7 @@
                 <td><span class="${e.event === 'BAN' ? 'sg-ban' : ''}">${esc(what)}</span>${e.note ? '<br><span style="opacity:.7">' + esc(e.note) + '</span>' : ''}</td></tr>`;
         }).join('');
         panel.querySelector('.sg-body').innerHTML = `
+            <h3>Band-scanning robots</h3>
             <div class="sg-modes">
               <button data-mode="watch" class="${enforce ? '' : 'sg-on'}">👁 Watch</button>
               <button data-mode="enforce" class="${enforce ? 'sg-on' : ''}">🛡 Enforce</button>
@@ -77,7 +80,16 @@
                 ? '<b>Enforce:</b> automatic band-scanning robots are disconnected and blocked for an hour.'
                 : '<b>Watch:</b> nobody is blocked. Scan Guard only writes down what it <i>would</i> block.'}
               People, the admin and your own network are never blocked.</div>
-            <h3>Blocked now</h3>
+            <h3>AI crawlers (ChatGPT, Claude, Perplexity …)</h3>
+            <div class="sg-modes">
+              <button data-ai="block" class="${aiOn ? 'sg-on' : ''}">🚫 Block</button>
+              <button data-ai="off" class="${aiOn ? '' : 'sg-on'}">Allow</button>
+            </div>
+            <div class="sg-help">${aiOn
+                ? `AI crawlers are told to stay away (robots.txt) and refused if they come anyway. Refused since the last restart: <b>${esc((st.ai || {}).blockedSinceStart || 0)}</b>.`
+                : 'AI crawlers are allowed to read this site.'}
+              Normal visitors, apps and search engines are not affected.</div>
+            <h3>Band-scanning robots: blocked now</h3>
             ${bans ? `<table>${bans}</table>` : '<div class="sg-empty">Nobody is blocked.</div>'}
             <h3>Recent events</h3>
             ${events ? `<table>${events}</table>` : '<div class="sg-empty">Nothing suspicious so far.</div>'}`;
@@ -113,7 +125,7 @@
         panel.id = 'sg-panel';
         panel.setAttribute('role', 'dialog');
         panel.innerHTML = `<button class="sg-close" aria-label="Close">×</button>
-            <h2>🛡 Scan Guard <span style="font-size:12px;font-weight:400;opacity:.7">by konvlachos</span></h2><p class="sg-sub">Protects this tuner from automatic band-scanning robots.</p>
+            <h2>🛡 Scan Guard <span style="font-size:12px;font-weight:400;opacity:.7">by konvlachos</span></h2><p class="sg-sub">Protects this tuner from band-scanning robots and this site from AI crawlers.</p>
             <div class="sg-body"><div class="sg-empty">Loading…</div></div>`;
         panel.addEventListener('click', async ev => {
             const t = ev.target.closest('button');
@@ -123,6 +135,7 @@
             if (t.classList.contains('sg-close')) return close();
             try {
                 if (t.dataset.mode) render({ ...(await api('POST', '/scanguard/mode?mode=' + t.dataset.mode)), ...(await api('GET', '/scanguard/status')) });
+                if (t.dataset.ai) { await api('POST', '/scanguard/ai?mode=' + t.dataset.ai); await refresh(); }
                 if (t.dataset.unban) { await api('POST', '/scanguard/unban?ip=' + encodeURIComponent(t.dataset.unban)); await refresh(); }
             } catch (e) { alert('Scan Guard: ' + e.message); }
         });

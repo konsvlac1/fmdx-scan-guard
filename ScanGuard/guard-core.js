@@ -1,6 +1,13 @@
-// Scan Guard core: protects a public FM-DX tuner from automated band-scanning bots.
+// Scan Guard core: protects a public FM-DX tuner from automated band-scanning bots
+// and keeps AI crawlers off the website.
 //
-// Called from two small hooks in server/index.js:
+// AI crawlers (aiCrawlers: "block" by default):
+//   - /robots.txt tells the known AI crawlers (GPTBot, ClaudeBot, PerplexityBot,
+//     Google-Extended, CCBot, Bytespider, ...) to stay away; everyone else is allowed
+//   - a crawler that comes anyway gets 403 for pages, files and the tuner connection
+//   (called from a third hook: httpGuard(req, res, next) before FM-DX serves anything)
+//
+// Band scanners are handled by two small hooks in server/index.js:
 //   onConnect(ws, request)            -> true = refuse this connection (address is banned)
 //   allowTune(ws, request, command)   -> false = drop this tune command
 //
@@ -42,8 +49,25 @@ const DEFAULTS = {
     throttledHitsToBan: 60,     // tune attempts ignored within 5 minutes before a ban
     banMinutes: 60,
     whitelist: [],              // addresses never touched
-    telegramLabel: 'TEF FM-DX'
+    telegramLabel: 'TEF FM-DX',
+    aiCrawlers: 'block',        // 'block' = robots.txt + 403 for AI crawlers, 'off' = do nothing
+    blockSearchEngines: false   // true = robots.txt also asks Google, Bing etc. to stay away
 };
+
+// AI crawlers and AI assistants that fetch pages. Names as they appear in robots.txt;
+// the ones marked robotsOnly do not have their own User-Agent (they are a robots.txt token).
+const AI_BOTS = [
+    'GPTBot', 'OAI-SearchBot', 'ChatGPT-User', 'ClaudeBot', 'Claude-SearchBot', 'Claude-User',
+    'Claude-Web', 'anthropic-ai', 'PerplexityBot', 'Perplexity-User', 'CCBot', 'Bytespider',
+    'Amazonbot', 'Meta-ExternalAgent', 'Meta-ExternalFetcher', 'FacebookBot', 'cohere-ai',
+    'cohere-training-data-crawler', 'MistralAI-User', 'DuckAssistBot', 'YouBot', 'Diffbot',
+    'ImagesiftBot', 'Timpibot', 'omgili', 'AI2Bot', 'Ai2Bot-Dolma', 'PanguBot', 'Kangaroo Bot',
+    'Webzio-Extended', 'Applebot-Extended', 'Google-Extended'
+];
+const ROBOTS_ONLY = ['Applebot-Extended', 'Google-Extended'];
+const AI_UA = new RegExp('(' + AI_BOTS.filter(b => !ROBOTS_ONLY.includes(b))
+    .map(b => b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '[ _-]?')).join('|') + ')', 'i');
+const aiStats = { blocked: 0, since: new Date().toISOString(), lastLog: new Map() };
 
 let config = { ...DEFAULTS };
 let configMtime = 0;
@@ -195,10 +219,70 @@ function tailRun(tunes, even) {
     };
 }
 
+function aiCrawlerName(ua) {
+    const m = String(ua || '').match(AI_UA);
+    return m ? m[1] : null;
+}
+
+function robotsTxt() {
+    const lines = ['# Robots policy (Scan Guard for FM-DX Webserver)', '# AI crawlers are not welcome on this site.', ''];
+    for (const b of AI_BOTS) lines.push(`User-agent: ${b}`);
+    lines.push('Disallow: /', '');
+    lines.push('User-agent: *');
+    lines.push(config.blockSearchEngines ? 'Disallow: /' : 'Allow: /');
+    return lines.join('\n') + '\n';
+}
+
+// Third hook: runs before FM-DX serves any page or file
+function httpGuard(req, res, next) {
+    try {
+        if (!enabled()) return next();
+        loadConfig();
+        if (config.aiCrawlers !== 'block') return next();
+        if (req.method === 'GET' && req.path === '/robots.txt') {
+            res.type('text/plain').set('Cache-Control', 'public, max-age=3600').send(robotsTxt());
+            return;
+        }
+        const bot = aiCrawlerName(req.headers['user-agent']);
+        if (bot) {
+            aiStats.blocked++;
+            const ip = guardIp(req);
+            const t = now();
+            const key = bot + ' ' + ip;
+            if (t - (aiStats.lastLog.get(key) || 0) > 60 * 60 * 1000) {          // one log line per crawler and address per hour
+                aiStats.lastLog.set(key, t);
+                log('AI_BLOCK', ip, { bot, path: req.path, note: `${bot} asked for ${req.path}` });
+            }
+            res.status(403).type('text/plain').send('AI crawlers are not allowed on this site.\n');
+            return;
+        }
+        res.set('X-Robots-Tag', 'noai, noimageai');
+    } catch (e) { /* never break the server */ }
+    next();
+}
+
+function setAiMode(mode) {
+    if (mode !== 'block' && mode !== 'off') return false;
+    let current = {};
+    try { current = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch (_) { current = { ...DEFAULTS }; }
+    current.aiCrawlers = mode;
+    fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(current, null, 2));
+    configMtime = 0;
+    loadConfig();
+    log('MODE', '-', { note: `AI crawlers: ${mode} (by admin)` });
+    return true;
+}
+
 function onConnect(ws, request) {
     try {
         if (!enabled()) return false;
         loadConfig();
+        if (config.aiCrawlers === 'block' && aiCrawlerName(request.headers['user-agent'])) {
+            aiStats.blocked++;
+            try { ws.close(1008, 'AI crawlers are not allowed on this site'); } catch (_) { /* ignore */ }
+            return true;
+        }
         for (const ip of allIps(request)) {
             const b = activeBan(ip);
             if (b && config.mode === 'enforce') {
@@ -275,6 +359,7 @@ function status() {
     return {
         enabled: enabled(),
         mode: config.mode,
+        ai: { mode: config.aiCrawlers, blockedSinceStart: aiStats.blocked, since: aiStats.since },
         bans: [...bans.entries()].filter(([, b]) => b.until > t).map(([ip, b]) => ({ ip, reason: b.reason, until: new Date(b.until).toISOString() })),
         watching: [...clients.entries()].filter(([, s]) => t - s.lastSeen < 10 * 60 * 1000)
             .map(([ip, s]) => ({ ip, tunesLast10Min: s.tunes.length, throttled: s.throttledUntil > t }))
@@ -317,4 +402,4 @@ setInterval(() => {
 
 loadConfig();
 
-module.exports = { onConnect, allowTune, status, unban, setMode, recentEvents, _test: { tailRun, guardIp, setConfig: c => { config = { ...DEFAULTS, ...c }; } } };
+module.exports = { onConnect, allowTune, httpGuard, status, unban, setMode, setAiMode, recentEvents, _test: { tailRun, guardIp, aiCrawlerName, robotsTxt, setConfig: c => { config = { ...DEFAULTS, ...c }; } } };
