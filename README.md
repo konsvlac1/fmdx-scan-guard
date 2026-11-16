@@ -1,5 +1,7 @@
 # Scan Guard for FM-DX Webserver
 
+*by konvlachos*
+
 **Scan Guard keeps automatic "band-scanning" robots away from your public FM-DX tuner,
 so real listeners can always use it.**
 
@@ -91,31 +93,58 @@ You should see lines with ✓ and "Scan Guard is installed".
 
 ## The first days: watch mode
 
-In watch mode Scan Guard blocks nobody. It only writes down what it would have blocked,
-in the file **`scanguard.log`** in your FM-DX folder.
+In watch mode Scan Guard blocks nobody. It only writes down what it would have blocked.
 
-- **Windows:** open the FM-DX folder and double-click `scanguard.log`.
-- **Linux:** `tail /home/pi/fm-dx-webserver/scanguard.log`
+**To see what it noticed:**
+1. Open your FM-DX page and log in as **admin**.
+2. Open the **settings menu** (the gear). Under "You are logged in as an administrator"
+   you see a row of small buttons. Click the **shield 🛡** button.
+3. A window opens with **Recent events**, for example
+   *"would have been blocked (watch mode): band sweep, 87.50→92.50 MHz"*.
+   If it says "Nothing suspicious so far", no robot has come yet.
 
-Each line shows the time, the internet address, and the reason, for example
-*"band sweep, 87.50→92.50 MHz, 50 even steps, 0.6 s/tune"*.
-If the file does not exist yet, nothing suspicious has happened.
+(Everything is also written to the file `scanguard.log` in your FM-DX folder.)
 
 ## Start blocking: enforce mode
 
-When you are happy with what you saw in the log:
+When you are happy with what you saw:
 
-1. Open the file **`plugins_configs/scanguard.json`** in your FM-DX folder
-   (Windows: right-click → Open with → Notepad. Linux: `nano`).
-2. Change `"mode": "watch"` to `"mode": "enforce"`.
-3. Save the file. **No restart is needed.**
+1. Click the **shield 🛡** button as above.
+2. Click **🛡 Enforce**. That's all, no restart needed.
 
 From then on robots are disconnected and blocked for one hour.
-To go back, change `enforce` back to `watch`.
+The shield button is **lit** while Scan Guard is in enforce mode.
+To go back, click **👁 Watch**.
+
+## Test it yourself
+
+You can play the robot yourself to see Scan Guard react. The test robot tunes your
+tuner from 87.5 MHz upward in steps of 0.1 MHz, one step every 0.6 seconds,
+like a real band scanner. Your listeners will hear the frequency change for about a minute.
+
+1. Use a computer on **another internet connection** than your FM-DX server
+   (another house, or a laptop on your phone's hotspot). From the server's own
+   network you are treated as "your own network" and never blocked.
+   That computer needs Node.js; a second FM-DX server is perfect.
+2. Download Scan Guard there (the same download as in the install steps).
+3. Run (change the address to your own FM-DX page):
+   - Linux: `WS_PATH=/home/pi/fm-dx-webserver/node_modules/ws node fmdx-scan-guard-main/test/bot.js https://your-fmdx-page.example 70 600`
+   - Windows: `set WS_PATH=C:\fm-dx-webserver\node_modules\ws` and then
+     `node fmdx-scan-guard-main\test\bot.js https://your-fmdx-page.example 70 600`
+
+   (`WS_PATH` points to the `ws` part that every FM-DX installation already has.)
+4. What you should see:
+   - **Watch mode:** the robot finishes all its steps. In the shield 🛡 window you see
+     *"would have been blocked (watch mode)"* after about 50 steps.
+   - **Enforce mode:** the robot stops with *"closed by server … Automated scanning is not
+     allowed on this tuner"* after about 50 steps, and the shield window shows
+     *"blocked for automated scanning"*.
+5. Afterwards press **Unblock** in the shield window, so that computer can use the tuner again.
 
 ## Unblock someone
 
-A block ends by itself after one hour. To end it earlier, simply restart FM-DX Webserver.
+A block ends by itself after one hour. To end it earlier, click the **shield 🛡** button
+and press **Unblock** next to the address. (Restarting FM-DX also clears all blocks.)
 
 To never block a certain address, write it in `whitelist` in `plugins_configs/scanguard.json`,
 for example: `"whitelist": ["203.0.113.7"]`.
@@ -198,13 +227,18 @@ TELEGRAM_CHAT_ID=123456789
 
 ### Admin endpoints (admin login required)
 
-- `GET /scanguard/status`: current bans and watched addresses
+- `GET /scanguard/status`: mode, current bans, watched addresses, recent events
+- `POST /scanguard/mode?mode=watch|enforce`: switch mode
 - `POST /scanguard/unban?ip=1.2.3.4`: lift a ban
+
+The shield button in the admin quick buttons uses these. POST requests are only
+accepted from the server's own page (Origin check).
 
 ### Files
 
 - `install.js`: the installer. It copies `ScanGuard.js` + `ScanGuard/` into `plugins/` and adds three lines to `server/index.js` (the same change as `core-hook.patch`, made against FM-DX 1.4.2).
 - `test/run.sh`: simulated robots and people, no tuner needed: `bash test/run.sh enforce`.
+- `test/bot.js`: a test robot for a real server (see "Test it yourself").
 
 ## License
 

@@ -281,6 +281,27 @@ function status() {
     };
 }
 
+function setMode(mode) {
+    if (mode !== 'watch' && mode !== 'enforce') return false;
+    loadConfig();
+    let current = {};
+    try { current = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch (_) { current = { ...DEFAULTS }; }
+    current.mode = mode;
+    fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(current, null, 2));
+    configMtime = 0;
+    loadConfig();
+    log('MODE', '-', { note: `switched to ${mode} by admin` });
+    return true;
+}
+
+function recentEvents(n = 15) {
+    try {
+        const lines = fs.readFileSync(LOG_PATH, 'utf8').trim().split('\n').slice(-n).reverse();
+        return lines.map(l => { try { return JSON.parse(l); } catch (_) { return null; } }).filter(Boolean);
+    } catch (_) { return []; }
+}
+
 function unban(ip) {
     const had = bans.delete(cleanIp(ip));
     if (had) log('UNBAN', cleanIp(ip), { note: 'by admin' });
@@ -296,4 +317,4 @@ setInterval(() => {
 
 loadConfig();
 
-module.exports = { onConnect, allowTune, status, unban, _test: { tailRun, guardIp, setConfig: c => { config = { ...DEFAULTS, ...c }; } } };
+module.exports = { onConnect, allowTune, status, unban, setMode, recentEvents, _test: { tailRun, guardIp, setConfig: c => { config = { ...DEFAULTS, ...c }; } } };
