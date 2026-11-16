@@ -98,3 +98,7 @@ Expected: every bot is banned or slowed down, and no person, admin or LAN client
   stopped. It also no longer occupies the tuner much.
 - It does not block AI web crawlers reading the page. Use `robots.txt` and a
   reverse-proxy rule for that.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
