@@ -16,7 +16,7 @@
   background: var(--color-1, #1b1b1b); color: var(--color-text, #fff); border-radius: 14px;
   border: 1px solid var(--color-4, #888); box-shadow: 0 10px 40px rgba(0,0,0,.6); font-size: 14px; text-align: left; }
 .sg-box { text-align: left; font-size: 14px; }
-#sg-setup .sg-box { max-width: 760px; margin: 0 auto; }
+#scanguard .sg-box { max-width: 760px; margin: 0 auto; }
 #sg-backdrop { position: fixed; inset: 0; z-index: 99999; background: rgba(0,0,0,.45); }
 .sg-box h2 { margin: 0 0 4px; font-size: 18px; display: flex; align-items: center; gap: 8px; }
 .sg-box .sg-sub { margin: 0 0 14px; opacity: .75; font-size: 13px; }
@@ -184,18 +184,18 @@
     function addSetupTab() {
         const pluginsLi = document.querySelector('ul.nav li[data-panel="plugins-tab"]');
         const pluginsPanel = document.getElementById('plugins-tab');
-        if (!pluginsLi || !pluginsPanel || document.getElementById('sg-setup')) return !!pluginsLi;
+        if (!pluginsLi || !pluginsPanel || document.getElementById('scanguard')) return !!pluginsLi;
         addStyle();
         const li = document.createElement('li');
         li.setAttribute('role', 'tab');
-        li.setAttribute('data-panel', 'sg-setup');
+        li.setAttribute('data-panel', 'scanguard');
         li.setAttribute('tabindex', '0');
-        li.innerHTML = '<a href="#" role="tab" tabindex="-1" aria-controls="sg-setup"><i class="fa-solid fa-fw fa-shield-halved"></i> Scan Guard</a>';
+        li.innerHTML = '<a href="#" role="tab" tabindex="-1" aria-controls="scanguard"><i class="fa-solid fa-fw fa-shield-halved"></i> Scan Guard</a>';
         pluginsLi.after(li);
 
         const tab = document.createElement('div');
         tab.className = 'panel-full m-0 tab-content no-bg';
-        tab.id = 'sg-setup';
+        tab.id = 'scanguard';
         tab.setAttribute('role', 'tabpanel');
         tab.style.display = 'none';
         tab.innerHTML = `<h2>Scan Guard</h2>
@@ -215,16 +215,16 @@
             li.classList.add('active');
             li.setAttribute('aria-selected', 'true');
             if (document.activeElement && document.activeElement.closest && document.activeElement.closest('ul.nav')) li.focus({ preventScroll: true });
-            history.replaceState(null, '', '#sg-setup');
+            history.replaceState(null, '', '#scanguard');
             document.querySelectorAll('.tab-content').forEach(x => { x.style.display = 'none'; });
             tab.style.display = 'block';           // the Setup stylesheet hides tabs by default
             refresh(tab.querySelector('.sg-box'));
         });
         li.addEventListener('keydown', e => { if (e.key === 'Enter') li.click(); });
-        window.addEventListener('hashchange', () => { if (location.hash === '#sg-setup') li.click(); });
-        // Direct link /setup#sg-setup: the Setup page shows its first tab while starting,
+        window.addEventListener('hashchange', () => { if (location.hash === '#scanguard') li.click(); });
+        // Direct link /setup#scanguard: the Setup page shows its first tab while starting,
         // so keep selecting ours until it stays visible (up to 5 s)
-        if (location.hash === '#sg-setup') {
+        if (location.hash === '#scanguard') {
             let n = 0;
             const t = setInterval(() => {
                 if (tab.style.display === 'none' || !tab.offsetParent || !filled) li.click();
