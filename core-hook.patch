@@ -1,0 +1,30 @@
+--- a/server/index.js
++++ b/server/index.js
+@@ -367,10 +367,17 @@
+   }
+ }, 60 * 60 * 1000); // Run every hour
+ 
++// Scan Guard (plugins/ScanGuard): optional, the server runs normally without it
++let scanGuard = null;
++try { scanGuard = require('../plugins/ScanGuard/guard-core'); } catch (e) { scanGuard = null; }
++
+ wss.on('connection', (ws, request) => {
+     const output = serverConfig.xdrd.wirelessConnection ? client : serialport;
+     const { ip: clientIp, isLocal, isInternal } = helpers.getClient(request);
+ 
++    // Scan Guard (plugins/ScanGuard): refuse addresses banned for automated band scanning
++    if (scanGuard && scanGuard.onConnect(ws, request)) return;
++
+     // Per-IP limit connection open
+     if (!isLocal) {
+         const currentCount = ipConnectionCounts.get(clientIp) || 0;
+@@ -455,6 +462,9 @@
+             }
+         }
+ 
++        // Scan Guard: drop tune commands from automated band scanners
++        if (scanGuard && command.startsWith("T") && !scanGuard.allowTune(ws, request, command)) return;
++
+         if ((serverConfig.publicTuner && !serverConfig.lockToAdmin) || isAdminAuthenticated || (!serverConfig.publicTuner && !serverConfig.lockToAdmin && isTuneAuthenticated)) {
+             output.write(`${command}\n`);
+         }
