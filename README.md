@@ -2,6 +2,8 @@
 
 *by konvlachos*
 
+🇬🇷 [Οδηγίες στα ελληνικά](README.el.md)
+
 **Scan Guard protects your public FM-DX Webserver in two ways:**
 
 ### 1. It keeps AI crawlers off your website 🚫
