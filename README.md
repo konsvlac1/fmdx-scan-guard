@@ -204,6 +204,10 @@ Just run the install step again (the same line as before). It is safe to run it 
 
 ## Questions
 
+**The shield window or Setup tab says "One more step is needed"?**
+Scan Guard was copied into the `plugins` folder by hand, so the lines it needs in `server/index.js` are missing.
+Press **🔧 Fix it now** in that note, then restart FM-DX. (Running the install step does the same.)
+
 **Will my listeners notice anything?**
 No. Normal tuning (buttons, presets, typing a frequency, mouse wheel, holding the arrow keys)
 is never blocked.

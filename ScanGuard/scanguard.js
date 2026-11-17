@@ -74,7 +74,11 @@
             return `<tr><td>${esc(when(e.time))}</td><td>${esc(e.ip === '-' ? '' : e.ip)}</td>
                 <td><span class="${e.event === 'BAN' ? 'sg-ban' : ''}">${esc(what)}</span>${e.note ? '<br><span style="opacity:.7">' + esc(e.note) + '</span>' : ''}</td></tr>`;
         }).join('');
-        box.querySelector('.sg-body').innerHTML = `
+        const hookNote = st.hookInstalled === false
+            ? `<p style="color:#f66"><b>One more step is needed:</b> Scan Guard must add a few lines to FM-DX's <code>server/index.js</code>, otherwise it protects nothing.<br>
+               <button data-act="installhook">🔧 Fix it now</button> then restart FM-DX.</p>`
+            : (st.hookAddedNow ? `<p style="color:#fc6"><b>✅ Done. Now restart FM-DX</b> (close it and start it again). After that Scan Guard protects your tuner.</p>` : '');
+        box.querySelector('.sg-body').innerHTML = hookNote + `
             <h3>Band-scanning robots</h3>
             <div class="sg-modes">
               <button data-mode="watch" class="${enforce ? '' : 'sg-on'}">👁 Watch</button>
@@ -113,6 +117,7 @@
             ev.stopPropagation();
             if (t.classList.contains('sg-close')) return close();
             try {
+                if (t.dataset.act === 'installhook') await api('POST', '/scanguard/installhook');
                 if (t.dataset.mode) await api('POST', '/scanguard/mode?mode=' + t.dataset.mode);
                 if (t.dataset.ai) await api('POST', '/scanguard/ai?mode=' + t.dataset.ai);
                 if (t.dataset.unban) await api('POST', '/scanguard/unban?ip=' + encodeURIComponent(t.dataset.unban));
