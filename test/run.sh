@@ -9,3 +9,6 @@ mkdir -p "$T/app/plugins" "$T/home"
 cp -r ../ScanGuard "$T/app/plugins/"
 HOME="$T/home" node sim.js "$T/app" "${1:-enforce}"
 rm -rf "$T"
+echo
+echo "=== band limit / rate / burst assertions ==="
+node limits.js

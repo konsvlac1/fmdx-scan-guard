@@ -51,7 +51,19 @@ const DEFAULTS = {
     whitelist: [],              // addresses never touched
     telegramLabel: 'TEF FM-DX',
     aiCrawlers: 'block',        // 'block' = robots.txt + 403 for AI crawlers, 'off' = do nothing
-    blockSearchEngines: false   // true = robots.txt also asks Google, Bing etc. to stay away
+    blockSearchEngines: false,  // true = robots.txt also asks Google, Bing etc. to stay away
+
+    // Band limit: keep clients inside the tuner's frequency range, even a direct websocket/API
+    // client that bypasses the browser dial (e.g. a bot tuning below the FM band).
+    bandGuard: 'auto',          // 'auto' = follow the webserver's own tuning limit; 'off'; 'block' = drop out-of-band tunes; 'kick' = also disconnect repeat offenders
+    bandLowerMHz: null,         // low edge in MHz; null = use the webserver's tuningLowerLimit
+    bandUpperMHz: null,         // high edge in MHz; null = use the webserver's tuningUpperLimit
+    offBandStrikesToKick: 4,    // out-of-band tune attempts (within the rate window) before a kick (bandGuard: 'kick')
+    resetFreqOnKick: true,      // after an out-of-band kick, snap the tuner back to the default frequency
+
+    // Rate limit: how fast is "too fast". The window is configurable so action can come sooner.
+    rateWindowMinutes: 5,       // window for the sustained-rate check (lower = reacts sooner)
+    maxTunesPerMinute: 120      // hard cap: more changes than this in any 60 s is a bot -> disconnect
 };
 
 // AI crawlers and AI assistants that fetch pages. Names as they appear in robots.txt;
@@ -103,6 +115,38 @@ function serverConfig() {
 function enabled() {
     const plugins = serverConfig().plugins || [];
     return plugins.includes(PLUGIN_ENTRY);
+}
+
+// The frequency range to enforce, or null = do nothing.
+//   'off'               -> null
+//   'auto'              -> the webserver's own limits, but only when its tuningLimit is on
+//   'block' / 'kick'    -> bandLowerMHz/UpperMHz if set, else the webserver's limits
+// If no usable range is known, returns null (so 'block' without any limits never blocks everything).
+function bandLimits() {
+    const mode = config.bandGuard;
+    if (mode === 'off') return null;
+    const wc = (serverConfig() || {}).webserver || {};
+    if (mode === 'auto' && !wc.tuningLimit) return null;
+    let lower = config.bandLowerMHz, upper = config.bandUpperMHz;
+    if (lower == null) lower = wc.tuningLowerLimit;
+    if (upper == null) upper = wc.tuningUpperLimit;
+    lower = Number(lower); upper = Number(upper);
+    if (!isFinite(lower) || !isFinite(upper) || lower >= upper) return null;
+    return { lower, upper };
+}
+
+// Best-effort: put the tuner back on the default frequency after an out-of-band kick.
+// Uses the plugins API so it works even on a non-public tuner; silently skipped if unavailable.
+function resetTuner() {
+    if (!config.resetFreqOnKick || config.mode !== 'enforce') return;
+    try {
+        const api = require('../../server/plugins_api');
+        if (!api || typeof api.sendPrivilegedCommand !== 'function') return;
+        const sc = serverConfig() || {};
+        let f = Number(sc.defaultFreq);
+        if (!isFinite(f) || f <= 0) { const b = bandLimits(); f = b ? b.lower : 0; }
+        if (f > 0) api.sendPrivilegedCommand('T' + Math.round(f * 1000), true);
+    } catch (_) { /* no tuner write available: ignore */ }
 }
 
 function cleanIp(ip) {
@@ -170,7 +214,7 @@ function telegram(text) {
 function state(ip) {
     let s = clients.get(ip);
     if (!s) {
-        s = { tunes: [], sockets: new Set(), throttledUntil: 0, throttledHits: [], lastRateLog: 0, lastSeen: now() };
+        s = { tunes: [], sockets: new Set(), throttledUntil: 0, throttledHits: [], lastRateLog: 0, offBand: [], lastOffBandLog: 0, lastSeen: now() };
         clients.set(ip, s);
     }
     s.lastSeen = now();
@@ -309,6 +353,10 @@ function allowTune(ws, request, command) {
         const f = Number(String(command).slice(1)) / 1000;
         if (!isFinite(f)) return true;
 
+        const t = now();
+        const winMs = Math.max(1, Number(config.rateWindowMinutes) || 5) * 60 * 1000;
+        const retentionMs = Math.max(10 * 60 * 1000, winMs);
+
         const s = state(ip);
         if (!s.sockets.has(ws)) {
             s.sockets.add(ws);
@@ -319,13 +367,45 @@ function allowTune(ws, request, command) {
             return false;
         }
 
-        const t = now();
+        // 0. Band limit: keep the dial inside the configured range. Dropping the command here means
+        //    it never reaches the tuner, so an out-of-band tune simply does not work (the client may
+        //    still appear in FM-DX's "Command received" log - it was received, just not forwarded).
+        const band = bandLimits();
+        if (band && (f < band.lower - 1e-6 || f > band.upper + 1e-6)) {
+            s.offBand = (s.offBand || []).filter(x => t - x < winMs);
+            s.offBand.push(t);
+            if (t - (s.lastOffBandLog || 0) > 60 * 1000) {
+                s.lastOffBandLog = t;
+                log('OFF_BAND', ip, { freq: f, lower: band.lower, upper: band.upper, note: `${f.toFixed(2)} MHz is outside ${band.lower}-${band.upper} MHz` });
+            }
+            if (config.bandGuard === 'kick' && s.offBand.length >= config.offBandStrikesToKick) {
+                s.offBand = [];
+                resetTuner();
+                ban(ip, s, 'tuning outside the band', { note: `${config.offBandStrikesToKick} out-of-band tunes` });
+            }
+            return config.mode !== 'enforce';
+        }
+
         const last = s.tunes[s.tunes.length - 1];
         if (last && Math.abs(last.f - f) < 0.0015) return true;   // same frequency again (key repeat, RDS reset)
         s.tunes.push({ t, f });
-        s.tunes = s.tunes.filter(x => t - x.t < 10 * 60 * 1000).slice(-3000);
+        s.tunes = s.tunes.filter(x => t - x.t < retentionMs).slice(-3000);
 
-        // 1. Sweep through the band
+        // 1. Fast burst: far more changes in a minute than a person makes, kept up for most of that
+        //    minute. The sweep checks below skip fast runs on purpose (fast = a person scrolling), so
+        //    a quick API bot slips past them; this cap catches it and disconnects at once. The "span"
+        //    test keeps out a person holding the arrow key: they fly across the band but stop within
+        //    ~15 s (they reach the edge), whereas a bot hammers continuously.
+        const recent = s.tunes.filter(x => t - x.t < 60 * 1000);
+        if (recent.length > config.maxTunesPerMinute) {
+            const span = recent[recent.length - 1].t - recent[0].t;
+            if (span >= 30 * 1000) {
+                ban(ip, s, 'too fast', { tunesPerMinute: recent.length, note: `${recent.length} frequency changes in 1 min, kept up for ${Math.round(span / 1000)} s` });
+                return config.mode !== 'enforce';
+            }
+        }
+
+        // 2. Sweep through the band
         const even = tailRun(s.tunes, true);
         if (even && even.steps >= config.sweepMinSteps && even.span >= config.sweepMinSpanMHz && even.rhythm <= config.maxRhythmVariation && even.secondsPerTune >= config.sweepMinSecondsPerTune) {
             ban(ip, s, 'band sweep', { steps: even.steps, note: `${even.from.toFixed(2)}→${even.to.toFixed(2)} MHz, ${even.steps} even steps, ${even.secondsPerTune.toFixed(1)} s/tune` });
@@ -337,16 +417,16 @@ function allowTune(ws, request, command) {
             return config.mode !== 'enforce';
         }
 
-        // 2. Too many frequency changes, sustained over 5 minutes
-        const perWindow = s.tunes.filter(x => t - x.t < 5 * 60 * 1000).length;
+        // 3. Too many frequency changes, sustained over the rate window (5 min by default)
+        const perWindow = s.tunes.filter(x => t - x.t < winMs).length;
         if (perWindow > config.maxTunesPer5Minutes || s.throttledUntil > t) {
             if (perWindow > config.maxTunesPer5Minutes) s.throttledUntil = t + 60 * 1000;
             s.tunes.pop();                                    // an ignored tune does not count as tuning
-            s.throttledHits = s.throttledHits.filter(x => t - x < 5 * 60 * 1000);
+            s.throttledHits = s.throttledHits.filter(x => t - x < winMs);
             s.throttledHits.push(t);
             if (t - s.lastRateLog > 60 * 1000) {
                 s.lastRateLog = t;
-                log('THROTTLE', ip, { tunes5min: perWindow, note: `${perWindow} frequency changes in 5 min` });
+                log('THROTTLE', ip, { tunesWindow: perWindow, windowMin: config.rateWindowMinutes, note: `${perWindow} frequency changes in ${config.rateWindowMinutes} min` });
             }
             if (s.throttledHits.length >= config.throttledHitsToBan) {
                 s.throttledHits = [];
@@ -361,10 +441,13 @@ function allowTune(ws, request, command) {
 function status() {
     loadConfig();
     const t = now();
+    const b = bandLimits();
     return {
         enabled: enabled(),
         mode: config.mode,
         ai: { mode: config.aiCrawlers, blockedSinceStart: aiStats.blocked, since: aiStats.since },
+        band: { mode: config.bandGuard, lower: b ? b.lower : null, upper: b ? b.upper : null, setLower: config.bandLowerMHz, setUpper: config.bandUpperMHz },
+        rate: { windowMinutes: config.rateWindowMinutes, maxPerWindow: config.maxTunesPer5Minutes, maxPerMinute: config.maxTunesPerMinute },
         bans: [...bans.entries()].filter(([, b]) => b.until > t).map(([ip, b]) => ({ ip, reason: b.reason, until: new Date(b.until).toISOString() })),
         watching: [...clients.entries()].filter(([, s]) => t - s.lastSeen < 10 * 60 * 1000)
             .map(([ip, s]) => ({ ip, tunesLast10Min: s.tunes.length, throttled: s.throttledUntil > t }))
@@ -382,6 +465,33 @@ function setMode(mode) {
     configMtime = 0;
     loadConfig();
     log('MODE', '-', { note: `switched to ${mode} by admin` });
+    return true;
+}
+
+// Save the band / rate settings (from the Setup page). Only known keys, each range-checked;
+// written to scanguard.json with the same write-and-reload pattern as setMode / setAiMode.
+function setLimits(partial) {
+    loadConfig();
+    let current = {};
+    try { current = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch (_) { current = { ...DEFAULTS }; }
+    const p = partial || {};
+    const num = v => { const n = Number(v); return isFinite(n) ? n : null; };
+    if (['auto', 'off', 'block', 'kick'].includes(p.bandGuard)) current.bandGuard = p.bandGuard;
+    if (p.bandLowerMHz !== undefined) current.bandLowerMHz = (p.bandLowerMHz === null || p.bandLowerMHz === '') ? null : num(p.bandLowerMHz);
+    if (p.bandUpperMHz !== undefined) current.bandUpperMHz = (p.bandUpperMHz === null || p.bandUpperMHz === '') ? null : num(p.bandUpperMHz);
+    if (current.bandLowerMHz != null && current.bandUpperMHz != null && current.bandLowerMHz >= current.bandUpperMHz) { current.bandLowerMHz = null; current.bandUpperMHz = null; }
+    const rw = num(p.rateWindowMinutes); if (rw && rw >= 1 && rw <= 60) current.rateWindowMinutes = Math.round(rw);
+    const mw = num(p.maxTunesPerWindow); if (mw && mw >= 10) current.maxTunesPer5Minutes = Math.round(mw);
+    const mm = num(p.maxTunesPerMinute); if (mm && mm >= 10) current.maxTunesPerMinute = Math.round(mm);
+    const sk = num(p.offBandStrikesToKick); if (sk && sk >= 1) current.offBandStrikesToKick = Math.round(sk);
+    if (p.resetFreqOnKick !== undefined) current.resetFreqOnKick = !!p.resetFreqOnKick;
+    try {
+        fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+        fs.writeFileSync(CONFIG_PATH, JSON.stringify(current, null, 2));
+    } catch (_) { return false; }
+    configMtime = 0;
+    loadConfig();
+    log('LIMITS', '-', { note: `band ${config.bandGuard} ${config.bandLowerMHz == null ? 'auto' : config.bandLowerMHz}-${config.bandUpperMHz == null ? 'auto' : config.bandUpperMHz} MHz, rate ${config.maxTunesPer5Minutes}/${config.rateWindowMinutes}min, burst ${config.maxTunesPerMinute}/min (by admin)` });
     return true;
 }
 
@@ -407,4 +517,4 @@ setInterval(() => {
 
 loadConfig();
 
-module.exports = { onConnect, allowTune, httpGuard, status, unban, setMode, setAiMode, recentEvents, _test: { tailRun, guardIp, aiCrawlerName, robotsTxt, setConfig: c => { config = { ...DEFAULTS, ...c }; } } };
+module.exports = { onConnect, allowTune, httpGuard, status, unban, setMode, setAiMode, setLimits, recentEvents, _test: { tailRun, guardIp, aiCrawlerName, robotsTxt, bandLimits, setConfig: c => { config = { ...DEFAULTS, ...c }; } } };

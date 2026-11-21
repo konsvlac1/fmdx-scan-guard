@@ -25,6 +25,11 @@ is running, nobody else can use your tuner.
 Scan Guard watches **how** each visitor changes the frequency:
 - A **robot** changes frequency in perfectly even steps, at a perfectly steady speed,
   through a large part of the band. Scan Guard recognises this and blocks it for one hour.
+- A **robot that hammers the tuner** — changing frequency far too many times a minute,
+  and keeping it up — is disconnected at once (a person holding the arrow keys flies
+  across the band too, but only for a few seconds, so they are left alone).
+- A client that tries to tune **outside the band** — often through the raw API, below or
+  above the FM band — has those commands dropped, so the dial never leaves the band.
 - A **person** tunes in an irregular way: jumps to presets, types a frequency,
   holds the arrow keys, stops to listen. Scan Guard leaves people alone.
 - **You (the admin)**, and programs running on your own server or your own home
@@ -268,9 +273,17 @@ different" notice. The latest 1.4.x is recommended.
 |---|---|
 | **Band sweep**: 50+ tunes in a row in one direction with the same step (≤ 0.5 MHz), covering 5+ MHz, each frequency held 0.4 s or longer, at a machine-steady rhythm | disconnect + ban for 60 min |
 | **One-way walk**: 40+ tunes always upward (or downward) over 5+ MHz at a machine-steady rhythm (for example a list of known stations) | disconnect + ban for 60 min |
-| **Too many changes**: more than 300 frequency changes in 5 minutes | further tune commands are ignored for a minute; the client stays connected |
-| **Keeps going while slowed down**: 60 ignored tunes within 5 minutes | disconnect + ban for 60 min |
+| **Too fast (burst)**: more than `maxTunesPerMinute` (120) frequency changes in a minute, kept up for 30 s or more (a person holding the arrow key stops within ~15 s) | disconnect + ban for 60 min |
+| **Outside the band**: a tune below `bandLowerMHz` or above `bandUpperMHz` (e.g. a raw-API client tuning below the FM band) | the command is dropped — the dial does not move; with `bandGuard: "kick"`, a repeat offender is also disconnected + banned and the dial reset to default |
+| **Too many changes**: more than `maxTunesPerWindow` (300) frequency changes in `rateWindowMinutes` (5) | further tune commands are ignored for a minute; the client stays connected |
+| **Keeps going while slowed down**: 60 ignored tunes within the rate window | disconnect + ban for 60 min |
 
+- **Band limit:** with the default `bandGuard: "auto"`, Scan Guard enforces the range **only if the
+  webserver's own tuning limit is on** (its `tuningLowerLimit`/`tuningUpperLimit`); set `bandGuard` to
+  `block` or `kick` to enforce a range even when the webserver's limit is off. A dropped out-of-band
+  command may still appear in FM-DX's `[DEBUG] Command received` log — it was received, just not
+  forwarded to the tuner.
+- **React sooner:** lower `rateWindowMinutes` (e.g. to 2) and/or `maxTunesPerMinute` to act faster on a spammer.
 - **Exempt:** admin sessions, LAN/loopback clients, and whitelisted addresses.
 - **Not counted:** repeated tunes to the same frequency (key repeat, RDS reset).
 - **Address used:** the **last** `X-Forwarded-For` entry, the one your reverse proxy adds, so a fake header cannot dodge a ban.
@@ -294,7 +307,14 @@ different" notice. The latest 1.4.x is recommended.
 | Setting | Default | Meaning |
 |---|---|---|
 | `mode` | `watch` | `watch` = only log, `enforce` = slow down / disconnect / ban |
-| `maxTunesPer5Minutes` | 300 | frequency changes allowed in 5 minutes |
+| `bandGuard` | `auto` | `auto` = follow the webserver's own tuning limit; `off`; `block` = drop out-of-band tunes; `kick` = also disconnect repeat offenders |
+| `bandLowerMHz` | `null` | low edge in MHz; `null` = use the webserver's `tuningLowerLimit` |
+| `bandUpperMHz` | `null` | high edge in MHz; `null` = use the webserver's `tuningUpperLimit` |
+| `offBandStrikesToKick` | 4 | out-of-band tunes (within the rate window) before a kick (`bandGuard: "kick"`) |
+| `resetFreqOnKick` | `true` | after an out-of-band kick, snap the tuner back to `defaultFreq` |
+| `rateWindowMinutes` | 5 | window for the "too many changes" check (lower = reacts sooner) |
+| `maxTunesPerMinute` | 120 | hard cap: more changes than this in a minute (kept up 30 s+) = a bot → disconnect |
+| `maxTunesPer5Minutes` | 300 | frequency changes allowed in the rate window (kept name for older configs) |
 | `sweepMinSteps` | 50 | even steps in a row that count as a sweep |
 | `sweepMinSpanMHz` | 5.0 | minimum width of a sweep |
 | `sweepMaxStepMHz` | 0.5 | larger jumps are not sweep steps |
@@ -322,6 +342,7 @@ TELEGRAM_CHAT_ID=123456789
 
 - `GET /scanguard/status`: mode, current bans, watched addresses, recent events
 - `POST /scanguard/mode?mode=watch|enforce`: switch mode
+- `POST /scanguard/limits?...`: band limit + rate/burst settings (`bandGuard`, `bandLowerMHz`, `bandUpperMHz`, `rateWindowMinutes`, `maxTunesPerWindow`, `maxTunesPerMinute`, `offBandStrikesToKick`, `resetFreqOnKick`)
 - `POST /scanguard/unban?ip=1.2.3.4`: lift a ban
 - `POST /scanguard/ai?mode=block|off`: AI crawler blocking on or off
 

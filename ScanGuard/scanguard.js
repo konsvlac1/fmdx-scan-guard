@@ -39,6 +39,10 @@
 .sg-box .sg-about > summary::before { content: '\\25B8\\00a0'; }
 .sg-box .sg-about[open] > summary::before { content: '\\25BE\\00a0'; }
 .sg-box .sg-about p { margin: 8px 0 0; opacity: .9; }
+.sg-box .sg-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 8px 0 2px; }
+.sg-box .sg-num { width: 68px; padding: 3px 6px; font-size: 13px; border-radius: 6px; border: 1px solid rgba(255,255,255,.25);
+    background: rgba(255,255,255,.08); color: inherit; }
+.sg-box .sg-note { opacity: .6; font-size: 12px; }
 `;
 
     function addStyle() {
@@ -64,14 +68,27 @@
         BAN: 'blocked for automated scanning',
         REFUSED: 'tried again while blocked',
         THROTTLE: 'slowed down: too many changes',
+        OFF_BAND: 'tuning outside the band (dropped)',
         UNBAN: 'unblocked by admin',
         MODE: 'setting changed',
+        LIMITS: 'limits changed',
         AI_BLOCK: 'AI crawler refused'
     };
 
     function render(st, box) {
         const enforce = st.mode === 'enforce';
         const aiOn = !st.ai || st.ai.mode === 'block';
+        const band = st.band || {};
+        const bandMode = band.mode || 'auto';
+        const rate = st.rate || { windowMinutes: 5, maxPerWindow: 300, maxPerMinute: 120 };
+        const bandNote = {
+            off: '<b>Off:</b> no frequency limit is enforced.',
+            auto: band.lower != null
+                ? `<b>Auto:</b> using this server's own tuning limit, <b>${esc(band.lower)}&ndash;${esc(band.upper)} MHz</b>. Out-of-band tunes are dropped.`
+                : "<b>Auto:</b> this server has no tuning limit set, so nothing is enforced. Turn on the webserver's tuning limit, or pick Block/Disconnect and set a range below.",
+            block: band.lower != null ? `<b>Block:</b> out-of-band tunes are dropped (dial stays in <b>${esc(band.lower)}&ndash;${esc(band.upper)} MHz</b>); the listener stays connected.` : '<b>Block:</b> set a range below (or turn on the webserver\'s tuning limit) &mdash; without one, nothing is enforced.',
+            kick: band.lower != null ? `<b>Disconnect:</b> out-of-band tunes are dropped and a repeat offender is disconnected, blocked for an hour and the dial is reset to default (range <b>${esc(band.lower)}&ndash;${esc(band.upper)} MHz</b>).` : '<b>Disconnect:</b> set a range below (or turn on the webserver\'s tuning limit) &mdash; without one, nothing is enforced.'
+        }[bandMode] || '';
         const compact = !!(box && box.closest && box.closest('#sg-panel'));   // the small popup window vs the full Setup tab
         const openAttr = compact ? '' : ' open';                              // show the explainer open on the Setup page
         if (button) button.classList.toggle('active', enforce);
@@ -100,7 +117,25 @@
             <div class="sg-help">${enforce
                 ? '<b>Enforce (protecting now):</b> band-scanning robots are slowed down, and obvious scanners are disconnected and blocked for an hour.'
                 : '<b>Watch (safe start):</b> nobody is slowed or blocked yet &mdash; Scan Guard only writes down what it <i>would</i> do, so you can watch it work first. Switch to Enforce once the log looks right.'}
-              <br>A visitor is treated as a robot when it <b>sweeps the band</b> in even steps, <b>walks one way</b> through many frequencies, or makes <b>300+ frequency changes in 5 minutes</b>. People, the admin and your own network are never affected.</div>
+              <br>A visitor is treated as a robot when it <b>sweeps the band</b> in even steps, <b>walks one way</b> through many frequencies, changes frequency <b>more than ${esc(rate.maxPerMinute)} times in a minute</b>, or makes <b>${esc(rate.maxPerWindow)}+ changes in ${esc(rate.windowMinutes)} minutes</b>. People, the admin and your own network are never affected.</div>
+            <h3>Band limit (keep tuning inside the band)</h3>
+            <div class="sg-modes">
+              <button data-band="auto" class="${bandMode === 'auto' ? 'sg-on' : ''}">Auto</button>
+              <button data-band="off" class="${bandMode === 'off' ? 'sg-on' : ''}">Off</button>
+              <button data-band="block" class="${bandMode === 'block' ? 'sg-on' : ''}">Block</button>
+              <button data-band="kick" class="${bandMode === 'kick' ? 'sg-on' : ''}">Disconnect</button>
+            </div>
+            <div class="sg-help">${bandNote}
+              <div class="sg-row">Range <input class="sg-num" id="sg-band-lo" type="number" step="0.1" placeholder="${band.lower != null ? esc(band.lower) : 'auto'}" value="${band.setLower != null ? esc(band.setLower) : ''}">&ndash;<input class="sg-num" id="sg-band-hi" type="number" step="0.1" placeholder="${band.upper != null ? esc(band.upper) : 'auto'}" value="${band.setUpper != null ? esc(band.setUpper) : ''}"> MHz
+                <button class="sg-small" data-save="band">Save range</button>
+                <span class="sg-note">leave blank to use this server's own tuning limit</span></div>
+              <br>This also stops a client that tunes <b>outside the band through the raw API</b> (not the normal dial). The out-of-band command is dropped, so the tuner does not move &mdash; it may still show in FM-DX's &ldquo;Command received&rdquo; log (received, but not forwarded).</div>
+            <h3>React faster</h3>
+            <div class="sg-help">
+              <div class="sg-row">Allow up to <input class="sg-num" id="sg-max-win" type="number" min="10" step="10" value="${esc(rate.maxPerWindow)}"> changes in <input class="sg-num" id="sg-win" type="number" min="1" max="60" value="${esc(rate.windowMinutes)}"> min
+                <button class="sg-small" data-save="rate">Save</button></div>
+              <div class="sg-row">Hard cap <input class="sg-num" id="sg-max-min" type="number" min="10" step="10" value="${esc(rate.maxPerMinute)}"> changes / minute <span class="sg-note">anything faster is a bot &rarr; disconnected at once</span></div>
+              <span class="sg-note">Lower the window (e.g. 2&nbsp;min) or the per-minute cap to act sooner on a spammer.</span></div>
             <h3>AI crawlers (ChatGPT, Claude, Perplexity …)</h3>
             <div class="sg-modes">
               <button data-ai="block" class="${aiOn ? 'sg-on' : ''}">🚫 Block</button>
@@ -113,7 +148,7 @@
             <h3>Band-scanning robots: blocked now</h3>
             ${bans ? `<table>${bans}</table>` : '<div class="sg-empty">Nobody is blocked.</div>'}
             <h3>Recent events</h3>
-            <div class="sg-help"><b>Watch mode:</b> nothing here actually happened &mdash; it only shows what Enforce mode <i>would</i> do. <b>Slowed down</b> = that client changed frequency far too fast (300+ in 5 min, about once a second), so its <b>tuning stopped working for ~1 minute</b>; it stays connected &mdash; a warning, not a block. <b>Blocked</b> = disconnected and barred for an hour. A normal listener never reaches these; admin and your own network are always exempt.</div>
+            <div class="sg-help"><b>Watch mode:</b> nothing here actually happened &mdash; it only shows what Enforce mode <i>would</i> do. <b>Slowed down</b> = that client changed frequency too fast for the window, so its <b>tuning stopped working for ~1 minute</b>; it stays connected &mdash; a warning, not a block. <b>Tuning outside the band</b> = an out-of-band tune (often the raw API) was dropped; the dial did not move. <b>Blocked</b> = disconnected and barred for an hour (a band sweep, a &ldquo;too fast&rdquo; burst, or repeated out-of-band tries). A normal listener never reaches these; admin and your own network are always exempt.</div>
             ${events ? `<table>${events}</table>` : '<div class="sg-empty">Nothing suspicious so far.</div>'}`;
     }
 
@@ -134,8 +169,20 @@
                 if (t.dataset.act === 'installhook') await api('POST', '/scanguard/installhook');
                 if (t.dataset.mode) await api('POST', '/scanguard/mode?mode=' + t.dataset.mode);
                 if (t.dataset.ai) await api('POST', '/scanguard/ai?mode=' + t.dataset.ai);
+                if (t.dataset.band) await api('POST', '/scanguard/limits?bandGuard=' + t.dataset.band);
+                if (t.dataset.save === 'band') {
+                    const lo = box.querySelector('#sg-band-lo').value.trim();
+                    const hi = box.querySelector('#sg-band-hi').value.trim();
+                    await api('POST', '/scanguard/limits?bandLowerMHz=' + encodeURIComponent(lo) + '&bandUpperMHz=' + encodeURIComponent(hi));
+                }
+                if (t.dataset.save === 'rate') {
+                    const q = ['rateWindowMinutes=' + encodeURIComponent(box.querySelector('#sg-win').value.trim()),
+                               'maxTunesPerWindow=' + encodeURIComponent(box.querySelector('#sg-max-win').value.trim()),
+                               'maxTunesPerMinute=' + encodeURIComponent(box.querySelector('#sg-max-min').value.trim())].join('&');
+                    await api('POST', '/scanguard/limits?' + q);
+                }
                 if (t.dataset.unban) await api('POST', '/scanguard/unban?ip=' + encodeURIComponent(t.dataset.unban));
-                if (t.dataset.refresh === undefined || t.dataset.mode || t.dataset.ai || t.dataset.unban) await refresh(box);
+                await refresh(box);
             } catch (e) { alert('Scan Guard: ' + e.message); }
         });
     }
