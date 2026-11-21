@@ -72,6 +72,8 @@
     function render(st, box) {
         const enforce = st.mode === 'enforce';
         const aiOn = !st.ai || st.ai.mode === 'block';
+        const compact = !!(box && box.closest && box.closest('#sg-panel'));   // the small popup window vs the full Setup tab
+        const openAttr = compact ? '' : ' open';                              // show the explainer open on the Setup page
         if (button) button.classList.toggle('active', enforce);
         const bans = (st.bans || []).map(b => `<tr><td>${esc(b.ip)}</td><td>${esc(b.reason)}</td><td>until ${esc(when(b.until))}</td>
             <td><button class="sg-small" data-unban="${esc(b.ip)}">Unblock</button></td></tr>`).join('');
@@ -85,10 +87,10 @@
                <button data-act="installhook">🔧 Fix it now</button> then restart FM-DX.</p>`
             : (st.hookAddedNow ? `<p style="color:#fc6"><b>✅ Done. Now restart FM-DX</b> (close it and start it again). After that Scan Guard protects your tuner.</p>` : '');
         box.querySelector('.sg-body').innerHTML = hookNote + `
-            <details class="sg-about">
+            <details class="sg-about"${openAttr}>
               <summary>&#8505;&#65039; What is Scan Guard, and what problem does it solve?</summary>
               <p>Your tuner is a <b>single radio that everyone shares</b>. Automated <b>band-scanning robots</b> &mdash; for example sites that index public tuners (such as piratenscanner.nl) &mdash; connect and change the frequency hundreds of times a minute to sweep the whole band. While a robot scans, the dial keeps jumping, so <b>real listeners cannot listen</b>, and the robot also uses up bandwidth and a listener slot. Some <b>AI crawlers</b> (ChatGPT, Claude, Perplexity&hellip;) read the site automatically too.</p>
-              <p>Scan Guard watches <b>how fast the frequency is being changed</b>. A person tunes a few times; a robot tunes far too fast and too regularly. When it recognises that robotic pattern it first <b>slows the client down</b>, and in <b>Enforce</b> mode it <b>disconnects and blocks it for an hour</b>, so the tuner stays free for people. It also asks AI crawlers to stay away (robots.txt) and refuses them if they ignore it. <b>People, the admin and your own network are never blocked.</b></p>
+              <p>Scan Guard watches <b>how fast and how regularly</b> each visitor changes the frequency. A person tunes a few times, irregularly; a robot tunes far too fast and too evenly. <b>In Watch mode it only writes down what it finds &mdash; nobody is affected.</b> In <b>Enforce</b> mode it acts: a client making too many changes has its <b>tuning stopped for about a minute</b> (&ldquo;slowed down&rdquo;), and an obvious band-scanner is <b>disconnected and blocked for an hour</b>. It also asks AI crawlers to stay away (robots.txt) and refuses them if they ignore it. <b>People, the admin and your own network are never touched.</b></p>
             </details>
             <h3>Band-scanning robots</h3>
             <div class="sg-modes">
@@ -96,9 +98,9 @@
               <button data-mode="enforce" class="${enforce ? 'sg-on' : ''}">🛡 Enforce</button>
             </div>
             <div class="sg-help">${enforce
-                ? '<b>Enforce:</b> automatic band-scanning robots are disconnected and blocked for an hour.'
-                : '<b>Watch:</b> nobody is blocked. Scan Guard only writes down what it <i>would</i> block.'}
-              People, the admin and your own network are never blocked.</div>
+                ? '<b>Enforce (protecting now):</b> band-scanning robots are slowed down, and obvious scanners are disconnected and blocked for an hour.'
+                : '<b>Watch (safe start):</b> nobody is slowed or blocked yet &mdash; Scan Guard only writes down what it <i>would</i> do, so you can watch it work first. Switch to Enforce once the log looks right.'}
+              <br>A visitor is treated as a robot when it <b>sweeps the band</b> in even steps, <b>walks one way</b> through many frequencies, or makes <b>300+ frequency changes in 5 minutes</b>. People, the admin and your own network are never affected.</div>
             <h3>AI crawlers (ChatGPT, Claude, Perplexity …)</h3>
             <div class="sg-modes">
               <button data-ai="block" class="${aiOn ? 'sg-on' : ''}">🚫 Block</button>
@@ -111,7 +113,7 @@
             <h3>Band-scanning robots: blocked now</h3>
             ${bans ? `<table>${bans}</table>` : '<div class="sg-empty">Nobody is blocked.</div>'}
             <h3>Recent events</h3>
-            <div class="sg-help"><b>Slowed down</b> = that client changed frequency far too fast (300+ times in 5 min, about once a second), so its tune commands were ignored for ~1 minute &mdash; a warning, it stays connected. <b>Blocked</b> = disconnected and barred for an hour (after it kept going, a band sweep, or a one-way walk). In <b>Watch</b> mode nothing is actually slowed or blocked, only written here. A normal listener never reaches these.</div>
+            <div class="sg-help"><b>Watch mode:</b> nothing here actually happened &mdash; it only shows what Enforce mode <i>would</i> do. <b>Slowed down</b> = that client changed frequency far too fast (300+ in 5 min, about once a second), so its <b>tuning stopped working for ~1 minute</b>; it stays connected &mdash; a warning, not a block. <b>Blocked</b> = disconnected and barred for an hour. A normal listener never reaches these; admin and your own network are always exempt.</div>
             ${events ? `<table>${events}</table>` : '<div class="sg-empty">Nothing suspicious so far.</div>'}`;
     }
 
