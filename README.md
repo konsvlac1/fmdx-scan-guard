@@ -50,7 +50,7 @@ Each step is explained below. You do not need to know programming.
 
 ## What you need
 
-- **FM-DX Webserver 1.4** — any 1.4.x build from **1.4.0b** onward (Raspberry Pi, Linux PC or Windows). The **latest 1.4.x is recommended**.
+- **FM-DX Webserver 1.4** — any 1.4.x build from **1.4.0** onward (Raspberry Pi, Linux PC or Windows). The **latest 1.4.x is recommended**.
 - About **10 minutes**.
 - You must be able to **restart** FM-DX Webserver and log in as **admin**.
 
@@ -210,7 +210,7 @@ Press **🔧 Fix it now** in that note, then restart FM-DX. (Running the install
 
 **It says "server/index.js looks different (made for FM-DX 1.4.x)"?**
 This appears when the installer cannot find the exact spots it needs in `server/index.js`, so — to be safe —
-it changes nothing. Scan Guard supports every 1.4.x build from **1.4.0b** onward, so this usually means a much
+it changes nothing. Scan Guard supports every 1.4.x build from **1.4.0** onward, so this usually means a much
 older or a custom build. **Update FM-DX Webserver to the latest 1.4.x and run the install again**; that fixes it.
 If you still see it after updating, tell us your exact version and we will add support.
 

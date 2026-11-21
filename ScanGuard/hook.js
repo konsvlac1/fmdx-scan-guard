@@ -9,10 +9,11 @@ const HOOK_CONNECT = "\n    // Scan Guard (plugins/ScanGuard): refuse addresses 
 const HOOK_HTTP = "// Scan Guard (plugins/ScanGuard): keep AI crawlers off the site\napp.use((req, res, next) => (scanGuard ? scanGuard.httpGuard(req, res, next) : next()));\n";
 const HOOK_TUNE = "        // Scan Guard: drop tune commands from automated band scanners\n        if (scanGuard && command.startsWith(\"T\") && !scanGuard.allowTune(ws, request, command)) return;\n\n";
 
-// Anchors accept both the newer FM-DX 1.4.x layout and the older 1.4.0b/1.4.0c one:
+// Anchors accept every FM-DX 1.4.x layout (verified 1.4.0, 1.4.0a/b/c, 1.4.1, 1.4.2): the newer form
+// and the older one, at the two spots that changed between them:
 //   - client IP:   `const { ip: clientIp ... } = helpers.getClient(request);`  (1.4.1+)
-//                  `let clientIp = request.headers['x-forwarded-for'] || request.connection.remoteAddress;`  (1.4.0b/0c)
-//   - HTTP body:   `app.use(express.urlencoded(...))`  (1.4.1+)  /  `app.use(bodyParser.urlencoded(...))`  (1.4.0b/0c)
+//                  `let clientIp = request.headers['x-forwarded-for'] || request.connection.remoteAddress;`  (1.4.0-1.4.0c)
+//   - HTTP body:   `app.use(express.urlencoded(...))`  (1.4.1+)  /  `app.use(bodyParser.urlencoded(...))`  (1.4.0-1.4.0c)
 const ANCHOR_CONNECTION = "wss.on('connection'";
 const ANCHOR_CLIENT = /(?:const \{ ip: clientIp[^\n]*helpers\.getClient\(request\);|let clientIp = request\.headers\['x-forwarded-for'\] \|\| request\.connection\.remoteAddress;)\n/;
 const ANCHOR_HTTP = /app\.use\((?:express|bodyParser)\.urlencoded\(\{ extended: true \}\)\);/;
