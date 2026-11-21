@@ -9,16 +9,20 @@ const HOOK_CONNECT = "\n    // Scan Guard (plugins/ScanGuard): refuse addresses 
 const HOOK_HTTP = "// Scan Guard (plugins/ScanGuard): keep AI crawlers off the site\napp.use((req, res, next) => (scanGuard ? scanGuard.httpGuard(req, res, next) : next()));\n";
 const HOOK_TUNE = "        // Scan Guard: drop tune commands from automated band scanners\n        if (scanGuard && command.startsWith(\"T\") && !scanGuard.allowTune(ws, request, command)) return;\n\n";
 
+// Anchors accept both the newer FM-DX 1.4.x layout and the older 1.4.0b/1.4.0c one:
+//   - client IP:   `const { ip: clientIp ... } = helpers.getClient(request);`  (1.4.1+)
+//                  `let clientIp = request.headers['x-forwarded-for'] || request.connection.remoteAddress;`  (1.4.0b/0c)
+//   - HTTP body:   `app.use(express.urlencoded(...))`  (1.4.1+)  /  `app.use(bodyParser.urlencoded(...))`  (1.4.0b/0c)
 const ANCHOR_CONNECTION = "wss.on('connection'";
-const ANCHOR_CLIENT = /const \{ ip: clientIp[^\n]*helpers\.getClient\(request\);\n/;
-const ANCHOR_HTTP = 'app.use(express.urlencoded({ extended: true }));';
+const ANCHOR_CLIENT = /(?:const \{ ip: clientIp[^\n]*helpers\.getClient\(request\);|let clientIp = request\.headers\['x-forwarded-for'\] \|\| request\.connection\.remoteAddress;)\n/;
+const ANCHOR_HTTP = /app\.use\((?:express|bodyParser)\.urlencoded\(\{ extended: true \}\)\);/;
 const ANCHOR_WRITE = /( *)if \(\(serverConfig\.publicTuner && !serverConfig\.lockToAdmin\)[^\n]*\n\s*output\.write\(`\$\{command\}\\n`\);/;
 
 const HOOKS = [
     { has: HOOK_REQUIRE, ok: src => src.includes(ANCHOR_CONNECTION), add: src => src.replace(ANCHOR_CONNECTION, HOOK_REQUIRE + ANCHOR_CONNECTION) },
     { has: HOOK_CONNECT, ok: src => ANCHOR_CLIENT.test(src), add: src => src.replace(ANCHOR_CLIENT, m => m + HOOK_CONNECT) },
     { has: HOOK_TUNE, ok: src => ANCHOR_WRITE.test(src), add: src => src.replace(ANCHOR_WRITE, m => HOOK_TUNE + m) },
-    { has: HOOK_HTTP, ok: src => src.includes(ANCHOR_HTTP), add: src => src.replace(ANCHOR_HTTP, HOOK_HTTP + ANCHOR_HTTP) }
+    { has: HOOK_HTTP, ok: src => ANCHOR_HTTP.test(src), add: src => src.replace(ANCHOR_HTTP, m => HOOK_HTTP + m) }
 ];
 
 function read(indexJs) {

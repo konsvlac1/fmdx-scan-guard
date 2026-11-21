@@ -50,7 +50,7 @@ Each step is explained below. You do not need to know programming.
 
 ## What you need
 
-- **FM-DX Webserver version 1.4** (on a Raspberry Pi, a Linux PC or Windows).
+- **FM-DX Webserver 1.4** — any 1.4.x build from **1.4.0b** onward (Raspberry Pi, Linux PC or Windows). The **latest 1.4.x is recommended**.
 - About **10 minutes**.
 - You must be able to **restart** FM-DX Webserver and log in as **admin**.
 
@@ -207,6 +207,12 @@ Just run the install step again (the same line as before). It is safe to run it 
 **The shield window or Setup tab says "One more step is needed"?**
 Scan Guard was copied into the `plugins` folder by hand, so the lines it needs in `server/index.js` are missing.
 Press **🔧 Fix it now** in that note, then restart FM-DX. (Running the install step does the same.)
+
+**It says "server/index.js looks different (made for FM-DX 1.4.x)"?**
+This appears when the installer cannot find the exact spots it needs in `server/index.js`, so — to be safe —
+it changes nothing. Scan Guard supports every 1.4.x build from **1.4.0b** onward, so this usually means a much
+older or a custom build. **Update FM-DX Webserver to the latest 1.4.x and run the install again**; that fixes it.
+If you still see it after updating, tell us your exact version and we will add support.
 
 **Will my listeners notice anything?**
 No. Normal tuning (buttons, presets, typing a frequency, mouse wheel, holding the arrow keys)
