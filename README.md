@@ -248,6 +248,20 @@ Yes, under the MIT licence (see below).
 
 ## For advanced users
 
+### Supported FM-DX Webserver versions
+
+Scan Guard auto-installs its `server/index.js` lines on **every 1.4.x release** (tested against each one):
+
+| 1.4.0 | 1.4.0a | 1.4.0b | 1.4.0c | 1.4.1 | 1.4.2 |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+The installer accepts both `server/index.js` layouts: 1.4.0–1.4.0c use `bodyParser.urlencoded(...)` and
+`let clientIp = request.headers['x-forwarded-for'] || …`, while 1.4.1+ use `express.urlencoded(...)` and
+`helpers.getClient(request)`. A build whose layout it does not recognise (something older than 1.4.0, or a
+custom fork) is **declined safely** — nothing in `server/index.js` is changed and you get the "looks
+different" notice. The latest 1.4.x is recommended.
+
 ### How it decides
 
 | Behaviour | What Scan Guard does in enforce mode |

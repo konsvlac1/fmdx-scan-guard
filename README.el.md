@@ -253,6 +253,20 @@ node "%USERPROFILE%\Downloads\fmdx-scan-guard-main\fmdx-scan-guard-main\install.
 
 ## Για προχωρημένους
 
+### Υποστηριζόμενες εκδόσεις FM-DX Webserver
+
+Το Scan Guard προσθέτει αυτόματα τις γραμμές του στο `server/index.js` σε **κάθε έκδοση 1.4.x** (δοκιμασμένο σε κάθε μία):
+
+| 1.4.0 | 1.4.0a | 1.4.0b | 1.4.0c | 1.4.1 | 1.4.2 |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+Ο εγκαταστάτης δέχεται και τις δύο διατάξεις του `server/index.js`: οι 1.4.0–1.4.0c χρησιμοποιούν
+`bodyParser.urlencoded(...)` και `let clientIp = request.headers['x-forwarded-for'] || …`, ενώ οι 1.4.1+
+χρησιμοποιούν `express.urlencoded(...)` και `helpers.getClient(request)`. Μια έκδοση με άγνωστη διάταξη
+(παλαιότερη από 1.4.0 ή προσαρμοσμένη) **αφήνεται ανέπαφη** — δεν αλλάζει τίποτα στο `server/index.js` και
+βλέπετε το μήνυμα «looks different». Συνιστάται η πιο πρόσφατη 1.4.x.
+
 ### Πώς αποφασίζει
 
 | Συμπεριφορά | Τι κάνει το Scan Guard σε Enforce |
