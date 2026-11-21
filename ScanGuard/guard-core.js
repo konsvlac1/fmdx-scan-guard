@@ -58,6 +58,9 @@ const DEFAULTS = {
     bandGuard: 'auto',          // 'auto' = follow the webserver's own tuning limit; 'off'; 'block' = drop out-of-band tunes; 'kick' = also disconnect repeat offenders
     bandLowerMHz: null,         // low edge in MHz; null = use the webserver's tuningLowerLimit
     bandUpperMHz: null,         // high edge in MHz; null = use the webserver's tuningUpperLimit
+    allowedBands: [],           // optional list of allowed ranges [[lo,hi],...] in MHz (e.g. LW/MW/SW/FM but NOT OIRT).
+                                // When set, a tune is allowed only inside one of these bands; the single lower/upper above
+                                // is ignored. Leave empty to use the single lower/upper range instead.
     offBandStrikesToKick: 4,    // out-of-band tune attempts (within the rate window) before a kick (bandGuard: 'kick')
     resetFreqOnKick: true,      // after an out-of-band kick, snap the tuner back to the default frequency
 
@@ -135,6 +138,33 @@ function bandLimits() {
     return { lower, upper };
 }
 
+// Parse an allowed-bands value into [[lo,hi],...] MHz. Accepts an array of [lo,hi] pairs / {lo,hi}
+// objects, or a string like "0.144-27, 87.5-108". Invalid or empty -> [].
+function parseBands(v) {
+    if (!v) return [];
+    let arr = v;
+    if (typeof v === 'string') arr = v.split(',').map(s => s.trim()).filter(Boolean).map(s => s.split('-').map(x => Number(x.trim())));
+    if (!Array.isArray(arr)) return [];
+    const out = [];
+    for (const b of arr) {
+        let lo, hi;
+        if (Array.isArray(b)) { lo = Number(b[0]); hi = Number(b[1]); }
+        else if (b && typeof b === 'object') { lo = Number(b.lo != null ? b.lo : b.lower); hi = Number(b.hi != null ? b.hi : b.upper); }
+        if (isFinite(lo) && isFinite(hi) && lo < hi) out.push([lo, hi]);
+    }
+    return out.sort((a, b) => a[0] - b[0]);
+}
+
+// The set of allowed frequency ranges, or null = no restriction. A custom allowedBands list (e.g. a
+// SW band AND the FM band, but NOT the OIRT gap in between) takes precedence over the single range.
+function allowedRanges() {
+    if (config.bandGuard === 'off') return null;
+    const bands = parseBands(config.allowedBands);
+    if (bands.length) return bands;
+    const b = bandLimits();
+    return b ? [[b.lower, b.upper]] : null;
+}
+
 // Best-effort: put the tuner back on the default frequency after an out-of-band kick.
 // Uses the plugins API so it works even on a non-public tuner; silently skipped if unavailable.
 function resetTuner() {
@@ -144,7 +174,7 @@ function resetTuner() {
         if (!api || typeof api.sendPrivilegedCommand !== 'function') return;
         const sc = serverConfig() || {};
         let f = Number(sc.defaultFreq);
-        if (!isFinite(f) || f <= 0) { const b = bandLimits(); f = b ? b.lower : 0; }
+        if (!isFinite(f) || f <= 0) { const r = allowedRanges(); f = (r && r.length) ? r[0][0] : 0; }
         if (f > 0) api.sendPrivilegedCommand('T' + Math.round(f * 1000), true);
     } catch (_) { /* no tuner write available: ignore */ }
 }
@@ -370,13 +400,14 @@ function allowTune(ws, request, command) {
         // 0. Band limit: keep the dial inside the configured range. Dropping the command here means
         //    it never reaches the tuner, so an out-of-band tune simply does not work (the client may
         //    still appear in FM-DX's "Command received" log - it was received, just not forwarded).
-        const band = bandLimits();
-        if (band && (f < band.lower - 1e-6 || f > band.upper + 1e-6)) {
+        const ranges = allowedRanges();
+        if (ranges && !ranges.some(([lo, hi]) => f >= lo - 1e-6 && f <= hi + 1e-6)) {
+            const desc = ranges.map(r => r[0] + '-' + r[1]).join(', ');
             s.offBand = (s.offBand || []).filter(x => t - x < winMs);
             s.offBand.push(t);
             if (t - (s.lastOffBandLog || 0) > 60 * 1000) {
                 s.lastOffBandLog = t;
-                log('OFF_BAND', ip, { freq: f, lower: band.lower, upper: band.upper, note: `${f.toFixed(2)} MHz is outside ${band.lower}-${band.upper} MHz` });
+                log('OFF_BAND', ip, { freq: f, allowed: desc, note: `${f.toFixed(2)} MHz is outside the allowed band(s): ${desc} MHz` });
             }
             if (config.bandGuard === 'kick' && s.offBand.length >= config.offBandStrikesToKick) {
                 s.offBand = [];
@@ -446,7 +477,7 @@ function status() {
         enabled: enabled(),
         mode: config.mode,
         ai: { mode: config.aiCrawlers, blockedSinceStart: aiStats.blocked, since: aiStats.since },
-        band: { mode: config.bandGuard, lower: b ? b.lower : null, upper: b ? b.upper : null, setLower: config.bandLowerMHz, setUpper: config.bandUpperMHz },
+        band: { mode: config.bandGuard, lower: b ? b.lower : null, upper: b ? b.upper : null, setLower: config.bandLowerMHz, setUpper: config.bandUpperMHz, bands: parseBands(config.allowedBands), ranges: allowedRanges() },
         rate: { windowMinutes: config.rateWindowMinutes, maxPerWindow: config.maxTunesPer5Minutes, maxPerMinute: config.maxTunesPerMinute },
         bans: [...bans.entries()].filter(([, b]) => b.until > t).map(([ip, b]) => ({ ip, reason: b.reason, until: new Date(b.until).toISOString() })),
         watching: [...clients.entries()].filter(([, s]) => t - s.lastSeen < 10 * 60 * 1000)
@@ -480,6 +511,7 @@ function setLimits(partial) {
     if (p.bandLowerMHz !== undefined) current.bandLowerMHz = (p.bandLowerMHz === null || p.bandLowerMHz === '') ? null : num(p.bandLowerMHz);
     if (p.bandUpperMHz !== undefined) current.bandUpperMHz = (p.bandUpperMHz === null || p.bandUpperMHz === '') ? null : num(p.bandUpperMHz);
     if (current.bandLowerMHz != null && current.bandUpperMHz != null && current.bandLowerMHz >= current.bandUpperMHz) { current.bandLowerMHz = null; current.bandUpperMHz = null; }
+    if (p.allowedBands !== undefined) current.allowedBands = parseBands(p.allowedBands);
     const rw = num(p.rateWindowMinutes); if (rw && rw >= 1 && rw <= 60) current.rateWindowMinutes = Math.round(rw);
     const mw = num(p.maxTunesPerWindow); if (mw && mw >= 10) current.maxTunesPer5Minutes = Math.round(mw);
     const mm = num(p.maxTunesPerMinute); if (mm && mm >= 10) current.maxTunesPerMinute = Math.round(mm);
@@ -491,7 +523,8 @@ function setLimits(partial) {
     } catch (_) { return false; }
     configMtime = 0;
     loadConfig();
-    log('LIMITS', '-', { note: `band ${config.bandGuard} ${config.bandLowerMHz == null ? 'auto' : config.bandLowerMHz}-${config.bandUpperMHz == null ? 'auto' : config.bandUpperMHz} MHz, rate ${config.maxTunesPer5Minutes}/${config.rateWindowMinutes}min, burst ${config.maxTunesPerMinute}/min (by admin)` });
+    const bandNote = (config.allowedBands && config.allowedBands.length) ? 'bands ' + config.allowedBands.map(r => r[0] + '-' + r[1]).join('/') : `${config.bandLowerMHz == null ? 'auto' : config.bandLowerMHz}-${config.bandUpperMHz == null ? 'auto' : config.bandUpperMHz}`;
+    log('LIMITS', '-', { note: `band ${config.bandGuard} ${bandNote} MHz, rate ${config.maxTunesPer5Minutes}/${config.rateWindowMinutes}min, burst ${config.maxTunesPerMinute}/min (by admin)` });
     return true;
 }
 
@@ -517,4 +550,4 @@ setInterval(() => {
 
 loadConfig();
 
-module.exports = { onConnect, allowTune, httpGuard, status, unban, setMode, setAiMode, setLimits, recentEvents, _test: { tailRun, guardIp, aiCrawlerName, robotsTxt, bandLimits, setConfig: c => { config = { ...DEFAULTS, ...c }; } } };
+module.exports = { onConnect, allowTune, httpGuard, status, unban, setMode, setAiMode, setLimits, recentEvents, _test: { tailRun, guardIp, aiCrawlerName, robotsTxt, bandLimits, parseBands, allowedRanges, setConfig: c => { config = { ...DEFAULTS, ...c }; } } };

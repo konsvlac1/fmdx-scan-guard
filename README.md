@@ -159,31 +159,6 @@ From then on robots are disconnected and blocked for one hour.
 The shield button is **lit** while Scan Guard is in enforce mode.
 To go back, click **👁 Watch**.
 
-## Test it yourself (optional, a little technical)
-
-You can play the robot yourself to see Scan Guard react. The test robot tunes your
-tuner from 87.5 MHz upward in steps of 0.1 MHz, one step every 0.6 seconds,
-like a real band scanner. Your listeners will hear the frequency change for about a minute.
-
-1. Use a computer on **another internet connection** than your FM-DX server
-   (another house, or a laptop on your phone's hotspot). From the server's own
-   network you are treated as "your own network" and never blocked.
-   That computer needs Node.js; a second FM-DX server is perfect.
-2. Download Scan Guard there (the same download as in the install steps).
-3. Run (change the address to your own FM-DX page):
-   - Linux: `WS_PATH=/home/pi/fm-dx-webserver/node_modules/ws node fmdx-scan-guard-main/test/bot.js https://your-fmdx-page.example 70 600`
-   - Windows: `set WS_PATH=C:\fm-dx-webserver\node_modules\ws` and then
-     `node fmdx-scan-guard-main\test\bot.js https://your-fmdx-page.example 70 600`
-
-   (`WS_PATH` points to the `ws` part that every FM-DX installation already has.)
-4. What you should see:
-   - **Watch mode:** the robot finishes all its steps. In the shield 🛡 window you see
-     *"would have been blocked (watch mode)"* after about 50 steps.
-   - **Enforce mode:** the robot stops with *"closed by server … Automated scanning is not
-     allowed on this tuner"* after about 50 steps, and the shield window shows
-     *"blocked for automated scanning"*.
-5. Afterwards press **Unblock** in the shield window, so that computer can use the tuner again.
-
 ## Unblock someone
 
 A block ends by itself after one hour. To end it earlier, click the **shield 🛡** button
@@ -274,7 +249,7 @@ different" notice. The latest 1.4.x is recommended.
 | **Band sweep**: 50+ tunes in a row in one direction with the same step (≤ 0.5 MHz), covering 5+ MHz, each frequency held 0.4 s or longer, at a machine-steady rhythm | disconnect + ban for 60 min |
 | **One-way walk**: 40+ tunes always upward (or downward) over 5+ MHz at a machine-steady rhythm (for example a list of known stations) | disconnect + ban for 60 min |
 | **Too fast (burst)**: more than `maxTunesPerMinute` (120) frequency changes in a minute, kept up for 30 s or more (a person holding the arrow key stops within ~15 s) | disconnect + ban for 60 min |
-| **Outside the band**: a tune below `bandLowerMHz` or above `bandUpperMHz` (e.g. a raw-API client tuning below the FM band) | the command is dropped — the dial does not move; with `bandGuard: "kick"`, a repeat offender is also disconnected + banned and the dial reset to default |
+| **Outside the band**: a tune outside the allowed band(s) — either outside the single `bandLowerMHz`–`bandUpperMHz` range, or (with `allowedBands`) outside every listed band, e.g. the **OIRT band** between a SW band and the FM band | the command is dropped — the dial does not move; with `bandGuard: "kick"`, a repeat offender is also disconnected + banned and the dial reset to default |
 | **Too many changes**: more than `maxTunesPerWindow` (300) frequency changes in `rateWindowMinutes` (5) | further tune commands are ignored for a minute; the client stays connected |
 | **Keeps going while slowed down**: 60 ignored tunes within the rate window | disconnect + ban for 60 min |
 
@@ -310,6 +285,7 @@ different" notice. The latest 1.4.x is recommended.
 | `bandGuard` | `auto` | `auto` = follow the webserver's own tuning limit; `off`; `block` = drop out-of-band tunes; `kick` = also disconnect repeat offenders |
 | `bandLowerMHz` | `null` | low edge in MHz; `null` = use the webserver's `tuningLowerLimit` |
 | `bandUpperMHz` | `null` | high edge in MHz; `null` = use the webserver's `tuningUpperLimit` |
+| `allowedBands` | `[]` | optional list of allowed ranges, e.g. `[[0.144,27],[87.5,108]]`. When set, a tune is allowed only inside one of these bands (so the **OIRT band and the gaps between your bands are blocked**); the single lower/upper above is then ignored. For tuners with more than one band (LW/MW/SW + FM via an extended-tuner plugin). |
 | `offBandStrikesToKick` | 4 | out-of-band tunes (within the rate window) before a kick (`bandGuard: "kick"`) |
 | `resetFreqOnKick` | `true` | after an out-of-band kick, snap the tuner back to `defaultFreq` |
 | `rateWindowMinutes` | 5 | window for the "too many changes" check (lower = reacts sooner) |
@@ -342,7 +318,7 @@ TELEGRAM_CHAT_ID=123456789
 
 - `GET /scanguard/status`: mode, current bans, watched addresses, recent events
 - `POST /scanguard/mode?mode=watch|enforce`: switch mode
-- `POST /scanguard/limits?...`: band limit + rate/burst settings (`bandGuard`, `bandLowerMHz`, `bandUpperMHz`, `rateWindowMinutes`, `maxTunesPerWindow`, `maxTunesPerMinute`, `offBandStrikesToKick`, `resetFreqOnKick`)
+- `POST /scanguard/limits?...`: band limit + rate/burst settings (`bandGuard`, `bandLowerMHz`, `bandUpperMHz`, `allowedBands` — e.g. `allowedBands=0.144-27,87.5-108`, `rateWindowMinutes`, `maxTunesPerWindow`, `maxTunesPerMinute`, `offBandStrikesToKick`, `resetFreqOnKick`)
 - `POST /scanguard/unban?ip=1.2.3.4`: lift a ban
 - `POST /scanguard/ai?mode=block|off`: AI crawler blocking on or off
 
@@ -352,8 +328,6 @@ accepted from the server's own page (Origin check).
 ### Files
 
 - `install.js`: the installer. It copies `ScanGuard.js` + `ScanGuard/` into `plugins/` and adds four small line groups to `server/index.js` (the same change as `core-hook.patch`, made against FM-DX 1.4.2).
-- `test/run.sh`: simulated robots and people, no tuner needed: `bash test/run.sh enforce`.
-- `test/bot.js`: a test robot for a real server (see "Test it yourself").
 
 ## License
 

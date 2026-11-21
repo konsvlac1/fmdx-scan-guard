@@ -1,6 +1,6 @@
 var pluginConfig = {
     name: 'Scan Guard',
-    version: '1.5.0',
+    version: '1.6.0',
     author: 'konvlachos',
     frontEndPath: 'ScanGuard/scanguard.js'
 }

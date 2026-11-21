@@ -59,6 +59,6 @@ router.post('/scanguard/unban', adminOnly, (req, res) => res.json({ unbanned: gu
 
 {
     const st = guard.status();
-    const bandNote = st.band.lower != null ? `band ${st.band.mode} ${st.band.lower}-${st.band.upper} MHz` : `band ${st.band.mode} (no limit active)`;
+    const bandNote = (st.band.ranges && st.band.ranges.length) ? `band ${st.band.mode} ${st.band.ranges.map(r => r[0] + '-' + r[1]).join('/')} MHz` : `band ${st.band.mode} (no limit active)`;
     logInfo(`[Scan Guard] active, band scanners: ${st.mode}, ${bandNote}, AI crawlers: ${st.ai.mode}${hookState().missing ? ' - WARNING: its lines are missing in server/index.js: press "Fix it now" in Setup → Scan Guard (or run install.js), then restart' : ''}`);
 }

@@ -89,6 +89,8 @@
             block: band.lower != null ? `<b>Block:</b> out-of-band tunes are dropped (dial stays in <b>${esc(band.lower)}&ndash;${esc(band.upper)} MHz</b>); the listener stays connected.` : '<b>Block:</b> set a range below (or turn on the webserver\'s tuning limit) &mdash; without one, nothing is enforced.',
             kick: band.lower != null ? `<b>Disconnect:</b> out-of-band tunes are dropped and a repeat offender is disconnected, blocked for an hour and the dial is reset to default (range <b>${esc(band.lower)}&ndash;${esc(band.upper)} MHz</b>).` : '<b>Disconnect:</b> set a range below (or turn on the webserver\'s tuning limit) &mdash; without one, nothing is enforced.'
         }[bandMode] || '';
+        const bandsList = (band.bands && band.bands.length) ? band.bands.map(r => r[0] + '-' + r[1]).join(', ') : '';
+        const bandsDesc = bandsList ? bandsList.split(', ').map(x => esc(x)).join(', ') : '';
         const compact = !!(box && box.closest && box.closest('#sg-panel'));   // the small popup window vs the full Setup tab
         const openAttr = compact ? '' : ' open';                              // show the explainer open on the Setup page
         if (button) button.classList.toggle('active', enforce);
@@ -125,11 +127,14 @@
               <button data-band="block" class="${bandMode === 'block' ? 'sg-on' : ''}">Block</button>
               <button data-band="kick" class="${bandMode === 'kick' ? 'sg-on' : ''}">Disconnect</button>
             </div>
-            <div class="sg-help">${bandNote}
-              <div class="sg-row">Range <input class="sg-num" id="sg-band-lo" type="number" step="0.1" placeholder="${band.lower != null ? esc(band.lower) : 'auto'}" value="${band.setLower != null ? esc(band.setLower) : ''}">&ndash;<input class="sg-num" id="sg-band-hi" type="number" step="0.1" placeholder="${band.upper != null ? esc(band.upper) : 'auto'}" value="${band.setUpper != null ? esc(band.setUpper) : ''}"> MHz
+            <div class="sg-help">${bandsDesc ? `<b>Allowed bands:</b> ${bandsDesc} MHz &mdash; anything outside these is blocked, including the <b>OIRT band</b> and the gaps between your bands.` : bandNote}
+              <div class="sg-row">Allowed bands <input class="sg-num" style="width:210px" id="sg-bands" type="text" placeholder="e.g. 0.144-27, 87.5-108" value="${bandsList}"> MHz
+                <button class="sg-small" data-save="bands">Save bands</button>
+                <span class="sg-note">list every allowed range &mdash; blocks the OIRT band and the gaps in between</span></div>
+              <div class="sg-row">Single range <input class="sg-num" id="sg-band-lo" type="number" step="0.1" placeholder="${band.lower != null ? esc(band.lower) : 'auto'}" value="${band.setLower != null ? esc(band.setLower) : ''}">&ndash;<input class="sg-num" id="sg-band-hi" type="number" step="0.1" placeholder="${band.upper != null ? esc(band.upper) : 'auto'}" value="${band.setUpper != null ? esc(band.setUpper) : ''}"> MHz
                 <button class="sg-small" data-save="band">Save range</button>
-                <span class="sg-note">leave blank to use this server's own tuning limit</span></div>
-              <br>This also stops a client that tunes <b>outside the band through the raw API</b> (not the normal dial). The out-of-band command is dropped, so the tuner does not move &mdash; it may still show in FM-DX's &ldquo;Command received&rdquo; log (received, but not forwarded).</div>
+                <span class="sg-note">used only when no bands are listed above (blank = the server's own tuning limit)</span></div>
+              <br>This also stops a client that tunes <b>outside the allowed band(s) through the raw API</b> (not the normal dial). The out-of-band command is dropped, so the tuner does not move &mdash; it may still show in FM-DX's &ldquo;Command received&rdquo; log (received, but not forwarded).</div>
             <h3>React faster</h3>
             <div class="sg-help">
               <div class="sg-row">Allow up to <input class="sg-num" id="sg-max-win" type="number" min="10" step="10" value="${esc(rate.maxPerWindow)}"> changes in <input class="sg-num" id="sg-win" type="number" min="1" max="60" value="${esc(rate.windowMinutes)}"> min
@@ -174,6 +179,10 @@
                     const lo = box.querySelector('#sg-band-lo').value.trim();
                     const hi = box.querySelector('#sg-band-hi').value.trim();
                     await api('POST', '/scanguard/limits?bandLowerMHz=' + encodeURIComponent(lo) + '&bandUpperMHz=' + encodeURIComponent(hi));
+                }
+                if (t.dataset.save === 'bands') {
+                    const bands = box.querySelector('#sg-bands').value.trim();
+                    await api('POST', '/scanguard/limits?allowedBands=' + encodeURIComponent(bands));
                 }
                 if (t.dataset.save === 'rate') {
                     const q = ['rateWindowMinutes=' + encodeURIComponent(box.querySelector('#sg-win').value.trim()),
