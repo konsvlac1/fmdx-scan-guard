@@ -216,6 +216,14 @@ is never blocked.
 No. When you are logged in as admin you are never blocked. Your own home network and
 programs on the server itself (like the Scanner plugin) are never blocked either.
 
+**The log says "slowed down: too many changes" — what does that mean?**
+It is the gentlest step, a warning *before* any block. A client that changes the frequency
+more than **300 times in 5 minutes** (about once a second, non-stop — a rate a person never
+reaches by hand) has its tune commands **ignored for about a minute**; it stays connected and
+is **not** disconnected or banned. Only if it keeps hammering (60 ignored tunes within 5 minutes)
+is it then disconnected and blocked for an hour. In **watch mode** nothing is actually slowed or
+blocked — it is only written in the log. A normal listener never triggers this.
+
 **Does it stop AI robots that read my web page?**
 Yes, the ones that say who they are (ChatGPT, Claude, Perplexity, Common Crawl, ByteDance,
 Meta, Amazon and others). A robot that pretends to be a normal browser cannot be recognised

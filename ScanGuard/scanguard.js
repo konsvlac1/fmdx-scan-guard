@@ -33,6 +33,12 @@
 .sg-box .sg-close { position: absolute; top: 10px; right: 12px; padding: 2px 10px !important; font-size: 18px !important; }
 .sg-box .sg-small { padding: 3px 10px !important; font-size: 12px !important; }
 .sg-box .sg-ban { color: #ff8a80; font-weight: 700; }
+.sg-box .sg-about { margin: 2px 0 14px; padding: 10px 14px; border-radius: 10px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); font-size: 13px; line-height: 1.45; }
+.sg-box .sg-about > summary { cursor: pointer; font-weight: 700; opacity: .9; list-style: none; }
+.sg-box .sg-about > summary::-webkit-details-marker { display: none; }
+.sg-box .sg-about > summary::before { content: '\\25B8\\00a0'; }
+.sg-box .sg-about[open] > summary::before { content: '\\25BE\\00a0'; }
+.sg-box .sg-about p { margin: 8px 0 0; opacity: .9; }
 `;
 
     function addStyle() {
@@ -79,6 +85,11 @@
                <button data-act="installhook">🔧 Fix it now</button> then restart FM-DX.</p>`
             : (st.hookAddedNow ? `<p style="color:#fc6"><b>✅ Done. Now restart FM-DX</b> (close it and start it again). After that Scan Guard protects your tuner.</p>` : '');
         box.querySelector('.sg-body').innerHTML = hookNote + `
+            <details class="sg-about">
+              <summary>&#8505;&#65039; What is Scan Guard, and what problem does it solve?</summary>
+              <p>Your tuner is a <b>single radio that everyone shares</b>. Automated <b>band-scanning robots</b> &mdash; for example sites that index public tuners (such as piratenscanner.nl) &mdash; connect and change the frequency hundreds of times a minute to sweep the whole band. While a robot scans, the dial keeps jumping, so <b>real listeners cannot listen</b>, and the robot also uses up bandwidth and a listener slot. Some <b>AI crawlers</b> (ChatGPT, Claude, Perplexity&hellip;) read the site automatically too.</p>
+              <p>Scan Guard watches <b>how fast the frequency is being changed</b>. A person tunes a few times; a robot tunes far too fast and too regularly. When it recognises that robotic pattern it first <b>slows the client down</b>, and in <b>Enforce</b> mode it <b>disconnects and blocks it for an hour</b>, so the tuner stays free for people. It also asks AI crawlers to stay away (robots.txt) and refuses them if they ignore it. <b>People, the admin and your own network are never blocked.</b></p>
+            </details>
             <h3>Band-scanning robots</h3>
             <div class="sg-modes">
               <button data-mode="watch" class="${enforce ? '' : 'sg-on'}">👁 Watch</button>
@@ -100,6 +111,7 @@
             <h3>Band-scanning robots: blocked now</h3>
             ${bans ? `<table>${bans}</table>` : '<div class="sg-empty">Nobody is blocked.</div>'}
             <h3>Recent events</h3>
+            <div class="sg-help"><b>Slowed down</b> = that client changed frequency far too fast (300+ times in 5 min, about once a second), so its tune commands were ignored for ~1 minute &mdash; a warning, it stays connected. <b>Blocked</b> = disconnected and barred for an hour (after it kept going, a band sweep, or a one-way walk). In <b>Watch</b> mode nothing is actually slowed or blocked, only written here. A normal listener never reaches these.</div>
             ${events ? `<table>${events}</table>` : '<div class="sg-empty">Nothing suspicious so far.</div>'}`;
     }
 
